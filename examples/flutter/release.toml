@@ -1,0 +1,14 @@
+schema_version = 1
+[project]
+type = "flutter"
+[app]
+name = "Example Flutter"
+[android]
+package_name = "com.example.flutter"
+track = "internal"
+[ios]
+workspace = "ios/Runner.xcworkspace"
+scheme = "Runner"
+simulator_output = "build/ios/iphonesimulator/Runner.app"
+[artifacts]
+directory = "dist"

@@ -1,0 +1,19 @@
+name: Mobile Release
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        type: choice
+        options: [qa, internal]
+        required: true
+      platform:
+        type: choice
+        options: [all, android, ios]
+        default: all
+jobs:
+  release:
+    uses: your-org/mobile-release/.github/workflows/reusable-release.yml@v1
+    with:
+      command: ${{ inputs.command }}
+      platform: ${{ inputs.platform }}
+    secrets: inherit

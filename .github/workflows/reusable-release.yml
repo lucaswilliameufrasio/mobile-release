@@ -1,0 +1,35 @@
+name: Reusable Mobile Release
+on:
+  workflow_call:
+    inputs:
+      command: { required: true, type: string }
+      platform: { required: false, type: string, default: all }
+      runner: { required: false, type: string, default: macos-26 }
+    secrets:
+      ANDROID_KEYSTORE_BASE64: { required: false }
+      ANDROID_KEYSTORE_PASSWORD: { required: false }
+      ANDROID_KEY_ALIAS: { required: false }
+      ANDROID_KEY_PASSWORD: { required: false }
+      GOOGLE_PLAY_JSON_BASE64: { required: false }
+      APP_STORE_KEY_ID: { required: false }
+      APP_STORE_ISSUER_ID: { required: false }
+      APP_STORE_PRIVATE_KEY_BASE64: { required: false }
+jobs:
+  release:
+    runs-on: ${{ inputs.runner }}
+    env:
+      MOBILE_RELEASE_ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      MOBILE_RELEASE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      MOBILE_RELEASE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      MOBILE_RELEASE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      MOBILE_RELEASE_GOOGLE_PLAY_JSON_BASE64: ${{ secrets.GOOGLE_PLAY_JSON_BASE64 }}
+      MOBILE_RELEASE_APP_STORE_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
+      MOBILE_RELEASE_APP_STORE_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
+      MOBILE_RELEASE_APP_STORE_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_PRIVATE_KEY_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.26.x' }
+      - name: Install mobile-release
+        run: go install github.com/lucaswilliameufrasio/mobile-release/cmd/mobile-release@v1.0.0
+      - run: mobile-release -platform '${{ inputs.platform }}' '${{ inputs.command }}'

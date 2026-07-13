@@ -1,0 +1,20 @@
+schema_version = 1
+[project]
+type = "expo"
+[app]
+name = "Example Expo"
+environment = "internal"
+[android]
+package_name = "com.example.expo"
+track = "internal"
+[ios]
+workspace = "ios/ExampleExpo.xcworkspace"
+scheme = "ExampleExpo"
+configuration = "Release"
+simulator_output = "build/ios-simulator/Build/Products/Debug-iphonesimulator/ExampleExpo.app"
+[ota]
+enabled = true
+server_url = "https://ota.example.com"
+channel = "production"
+[artifacts]
+directory = "dist"

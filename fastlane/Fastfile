@@ -1,0 +1,29 @@
+def app_store_key
+  app_store_connect_api_key(
+    key_id: ENV.fetch("MOBILE_RELEASE_APP_STORE_KEY_ID"),
+    issuer_id: ENV.fetch("MOBILE_RELEASE_APP_STORE_ISSUER_ID"),
+    key_filepath: ENV.fetch("MOBILE_RELEASE_APP_STORE_PRIVATE_KEY_PATH")
+  )
+end
+platform :android do
+  lane :internal do
+    upload_to_play_store(track: ENV.fetch("MOBILE_RELEASE_ANDROID_TRACK", "internal"), aab: ENV.fetch("MOBILE_RELEASE_ANDROID_AAB_PATH"), json_key: ENV.fetch("MOBILE_RELEASE_GOOGLE_PLAY_JSON_PATH"), release_status: "completed", skip_upload_metadata: true, skip_upload_images: true, skip_upload_screenshots: true)
+  end
+  lane :review do
+    upload_to_play_store(track: "production", aab: ENV.fetch("MOBILE_RELEASE_ANDROID_AAB_PATH"), json_key: ENV.fetch("MOBILE_RELEASE_GOOGLE_PLAY_JSON_PATH"), release_status: ENV.fetch("MOBILE_RELEASE_ANDROID_RELEASE_STATUS", "draft"), skip_upload_metadata: true, skip_upload_images: true, skip_upload_screenshots: true)
+  end
+end
+platform :ios do
+  lane :build do
+    app_store_key
+    build_app(workspace: ENV.fetch("MOBILE_RELEASE_IOS_WORKSPACE"), scheme: ENV.fetch("MOBILE_RELEASE_IOS_SCHEME"), configuration: ENV.fetch("MOBILE_RELEASE_IOS_CONFIGURATION", "Release"), export_method: "app-store", output_directory: ENV.fetch("MOBILE_RELEASE_IOS_OUTPUT_DIR", "dist/ios"), output_name: "app.ipa")
+  end
+  lane :testflight do
+    app_store_key
+    upload_to_testflight(ipa: ENV.fetch("MOBILE_RELEASE_IOS_IPA_PATH", "dist/ios/app.ipa"), skip_waiting_for_build_processing: true)
+  end
+  lane :review do
+    app_store_key
+    upload_to_app_store(ipa: ENV.fetch("MOBILE_RELEASE_IOS_IPA_PATH", "dist/ios/app.ipa"), submit_for_review: true, automatic_release: false)
+  end
+end
