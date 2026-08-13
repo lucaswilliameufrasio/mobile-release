@@ -74,3 +74,48 @@ func stubAAB(t *testing.T) string {
 	}
 	return p
 }
+func TestResolveAABConfigWins(t *testing.T) {
+	want := stubAAB(t)
+	c := config.Defaults()
+	c.ProjectType = "flutter"
+	c.AndroidAABOutput = want
+	got, e := resolveAAB(c)
+	if e != nil || got != want {
+		t.Fatalf("%s %v", got, e)
+	}
+}
+func TestResolveAABDefaultPerProvider(t *testing.T) {
+	for _, tc := range []struct{ typ, rel string }{
+		{"expo", "android/app/build/outputs/bundle/release/app-release.aab"},
+		{"flutter", "build/app/outputs/bundle/release/app-release.aab"},
+	} {
+		dir := t.TempDir()
+		p := filepath.Join(dir, tc.rel)
+		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.WriteFile(p, []byte("x"), 0600); e != nil {
+			t.Fatal(e)
+		}
+		c := config.Defaults()
+		c.ProjectType = tc.typ
+		old, _ := os.Getwd()
+		if e := os.Chdir(dir); e != nil {
+			t.Fatal(e)
+		}
+		got, e := resolveAAB(c)
+		if ch := os.Chdir(old); ch != nil {
+			t.Fatal(ch)
+		}
+		if e != nil || got != tc.rel {
+			t.Fatalf("%s: %s %v", tc.typ, got, e)
+		}
+	}
+}
+func TestResolveAABMissing(t *testing.T) {
+	c := config.Defaults()
+	c.ProjectType = "kmp"
+	if _, e := resolveAAB(c); e == nil {
+		t.Fatal("expected error")
+	}
+}

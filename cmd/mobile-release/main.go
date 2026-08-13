@@ -21,26 +21,31 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: mobile-release [flags] <doctor|qa|internal>")
 		os.Exit(2)
 	}
-	c, e := config.Load(*cfgPath)
-	if e != nil {
-		panic(e)
+	r := runner.Exec{Dir: ".", Out: os.Stdout, Err: os.Stderr}
+	fatal := func(name string, fn func() error) {
+		if e := fn(); e != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", name, e)
+			os.Exit(1)
+		}
 	}
+	c := config.Defaults()
+	fatal("load config", func() error {
+		var e error
+		c, e = config.Load(*cfgPath)
+		return e
+	})
 	c = config.Resolve(c)
 	if c.ProjectType == "" {
 		c.ProjectType = project.Detect(".")
 	}
-	if e = config.Validate(c); e != nil {
-		panic(e)
-	}
+	fatal("validate config", func() error { return config.Validate(c) })
 	tmp, e := os.MkdirTemp("", "mobile-release-secrets-")
 	if e != nil {
-		panic(e)
+		fmt.Fprintf(os.Stderr, "temp dir: %v\n", e)
+		os.Exit(1)
 	}
 	defer os.RemoveAll(tmp)
-	if e = secrets.ApplyAll(tmp); e != nil {
-		panic(e)
-	}
-	r := runner.Exec{Dir: ".", Out: os.Stdout, Err: os.Stderr}
+	fatal("materialize secrets", func() error { return secrets.ApplyAll(tmp) })
 	if flag.Arg(0) == "doctor" {
 		for _, x := range []string{"git", "bundle"} {
 			if e = r.LookPath(x); e != nil {
