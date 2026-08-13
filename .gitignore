@@ -1,0 +1,20 @@
+# Secrets — nunca commitar
+.env
+*.jks
+*.p12
+*.p8
+*.mobileprovision
+google-play*.json
+service-account*.json
+
+# Builds e artefatos
+bin/
+dist/
+build/
+
+# Ferramentas / SO
+.DS_Store
+*.log
+
+# Outputs de teste locais
+test-results.txt
