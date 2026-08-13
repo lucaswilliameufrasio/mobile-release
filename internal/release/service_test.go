@@ -3,6 +3,8 @@ package release
 import (
 	"context"
 	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -42,6 +44,7 @@ func TestFlutterInternalAndroidPlan(t *testing.T) {
 	f := &fake{}
 	c := config.Defaults()
 	c.ProjectType = "flutter"
+	c.AndroidAABOutput = stubAAB(t)
 	if e := (Service{R: f, C: c}).Internal(context.Background(), "android"); e != nil {
 		t.Fatal(e)
 	}
@@ -55,10 +58,19 @@ func TestKMPInternalAllPlan(t *testing.T) {
 	c := config.Defaults()
 	c.ProjectType = "kmp"
 	c.AndroidAABTask = ":composeApp:bundleRelease"
+	c.AndroidAABOutput = stubAAB(t)
 	if e := (Service{R: f, C: c}).Internal(context.Background(), "all"); e != nil {
 		t.Fatal(e)
 	}
 	if len(f.calls) != 4 {
 		t.Fatalf("calls %#v", f.calls)
 	}
+}
+func stubAAB(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "app-release.aab")
+	if e := os.WriteFile(p, []byte("x"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	return p
 }

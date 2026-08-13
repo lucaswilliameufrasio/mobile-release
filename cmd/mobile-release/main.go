@@ -8,6 +8,7 @@ import (
 	"github.com/lucaswilliameufrasio/mobile-release/internal/project"
 	"github.com/lucaswilliameufrasio/mobile-release/internal/release"
 	"github.com/lucaswilliameufrasio/mobile-release/internal/runner"
+	"github.com/lucaswilliameufrasio/mobile-release/internal/secrets"
 	"os"
 	"time"
 )
@@ -29,6 +30,14 @@ func main() {
 		c.ProjectType = project.Detect(".")
 	}
 	if e = config.Validate(c); e != nil {
+		panic(e)
+	}
+	tmp, e := os.MkdirTemp("", "mobile-release-secrets-")
+	if e != nil {
+		panic(e)
+	}
+	defer os.RemoveAll(tmp)
+	if e = secrets.ApplyAll(tmp); e != nil {
 		panic(e)
 	}
 	r := runner.Exec{Dir: ".", Out: os.Stdout, Err: os.Stderr}
