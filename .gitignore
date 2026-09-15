@@ -18,3 +18,6 @@ build/
 
 # Outputs de teste locais
 test-results.txt
+
+# Artefatos locais de desenvolvimento
+dev-artifacts/
