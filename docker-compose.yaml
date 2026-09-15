@@ -1,0 +1,49 @@
+services:
+  app:
+    build: .
+    image: mobile-release:local
+    entrypoint: ["sleep", "infinity"]
+    init: true
+    environment:
+      MOBILE_RELEASE_DATABASE_URL: postgres://mobile_release:mobile_release@postgres:5432/mobile_release?sslmode=disable
+      MOBILE_RELEASE_VALKEY_URL: redis://valkey:6379/0
+    ports:
+      - "127.0.0.1:${APP_HOST_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    mem_limit: 128m
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: mobile_release
+      POSTGRES_PASSWORD: mobile_release
+      POSTGRES_DB: mobile_release
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mobile_release -d mobile_release"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 128m
+
+  valkey:
+    image: valkey/valkey:9.1-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${VALKEY_HOST_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 64m
+
+volumes:
+  postgres_data:

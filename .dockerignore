@@ -1,0 +1,12 @@
+.git
+.github
+bin
+dist
+examples
+fastlane
+.env
+.env.*
+*.md
+Gemfile
+Gemfile.lock
+mise.toml
