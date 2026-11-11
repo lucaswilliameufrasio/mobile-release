@@ -35,6 +35,16 @@ func runInit(_ context.Context, args []string) error {
 	if _, err := os.Stat(a.configPath); err == nil && !*force {
 		return fmt.Errorf("%s already exists (use -force to overwrite)", a.relative(a.configPath))
 	}
+	if err := a.writeConfig(); err != nil {
+		return err
+	}
+	a.printf("\nWrote %s.\nNext:\n  mobile-release setup    # store the credentials once\n  mobile-release doctor   # check tools and credentials\n  mobile-release deploy   # build and publish\n", a.relative(a.configPath))
+	return nil
+}
+
+// writeConfig detects the project, asks (when interactive) and writes
+// release.toml with only the chosen values.
+func (a *app) writeConfig() error {
 	info := project.Inspect(a.root)
 	c := proposal(info)
 	if a.interactive {
@@ -57,11 +67,7 @@ func runInit(_ context.Context, args []string) error {
 	if err := check.Validate(); err != nil {
 		return err
 	}
-	if err := os.WriteFile(a.configPath, append([]byte(configHeader), data...), 0o644); err != nil {
-		return err
-	}
-	a.printf("\nWrote %s.\nNext:\n  mobile-release setup    # store the credentials once\n  mobile-release doctor   # check tools and credentials\n  mobile-release deploy   # build and publish\n", a.relative(a.configPath))
-	return nil
+	return os.WriteFile(a.configPath, append([]byte(configHeader), data...), 0o644)
 }
 
 // proposal turns what was detected into a starting configuration.

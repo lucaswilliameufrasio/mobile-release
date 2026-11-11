@@ -305,3 +305,86 @@ func TestForgedConfirmationIsRefused(t *testing.T) {
 		t.Fatalf("genuine confirmation refused: %+v", out)
 	}
 }
+
+type adoptRecorder struct {
+	calls    [][]string
+	upToDate bool
+}
+
+func (r *adoptRecorder) exec(_ context.Context, _ string, args []string) (string, error) {
+	r.calls = append(r.calls, args)
+	if strings.Contains(strings.Join(args, " "), "-dry-run") {
+		if r.upToDate {
+			return "Plan (mobile-release v2.1.0)\n  = Makefile: skipped (already up to date)\n\nNothing to change.", nil
+		}
+		return "Plan (mobile-release v2.1.0)\n  + Makefile: create\n\nDry run: nothing was written.", nil
+	}
+	return "Done.", nil
+}
+
+func (r *adoptRecorder) applied() bool {
+	for _, call := range r.calls {
+		if call[0] == "adopt" && !strings.Contains(strings.Join(call, " "), "-dry-run") {
+			return true
+		}
+	}
+	return false
+}
+
+func connectAdopt(t *testing.T, rec *adoptRecorder, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) *mcp.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+	server := (&Server{Version: "test", Exec: rec.exec}).New()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatal(err)
+	}
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "c"}, &mcp.ClientOptions{ElicitationHandler: handler}).Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { session.Close() })
+	return session
+}
+
+func TestAdoptAlwaysAsksBeforeWriting(t *testing.T) {
+	cases := []struct {
+		name    string
+		handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)
+		applied bool
+		reason  string
+	}{
+		{"no elicitation", nil, false, "cannot ask the user"},
+		{"declined", answer("decline", nil), false, "did not accept"},
+		{"unchecked", answer("accept", map[string]any{"apply": false}), false, "did not confirm"},
+		{"accepted", answer("accept", map[string]any{"apply": true}), true, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &adoptRecorder{}
+			session := connectAdopt(t, rec, tc.handler)
+			var out AdoptOutput
+			call(t, session, "adopt", map[string]any{"dir": t.TempDir(), "workflow": true}, &out)
+			if out.Applied != tc.applied || rec.applied() != tc.applied || !strings.Contains(out.Reason, tc.reason) {
+				t.Fatalf("out=%+v calls=%v", out, rec.calls)
+			}
+			if !strings.Contains(strings.Join(rec.calls[0], " "), "adopt -yes -workflow=true -dry-run") {
+				t.Fatalf("plan call = %v", rec.calls[0])
+			}
+		})
+	}
+}
+
+func TestAdoptUpToDateDoesNotAsk(t *testing.T) {
+	asked := false
+	rec := &adoptRecorder{upToDate: true}
+	session := connectAdopt(t, rec, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		asked = true
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"apply": true}}, nil
+	})
+	var out AdoptOutput
+	call(t, session, "adopt", map[string]any{"dir": t.TempDir()}, &out)
+	if asked || out.Applied || rec.applied() || !strings.Contains(out.Reason, "already set up") {
+		t.Fatalf("asked=%v out=%+v", asked, out)
+	}
+}

@@ -37,6 +37,14 @@ mobile-release deploy    # pick environment and platform, review the plan, confi
 ```
 
 `deploy -dry-run` prints every command without building or publishing.
+
+To set up a whole project at once, `mobile-release adopt` runs `init` when
+needed, adds a managed Makefile block that pins the CLI version
+(`make release-install`, `release-setup`, `release-doctor`, `deploy`,
+`deploy-dry-run`, `release-qa`), ignores `dist/` and, with `-workflow`, adds a
+manual release workflow pinned to the release's commit. It shows the plan,
+asks before writing and never overwrites: hand-written targets or an existing
+workflow are reported and left alone.
 `mobile-release qa` builds an APK and a simulator app without release signing.
 
 ## release.toml
@@ -173,6 +181,7 @@ claude mcp add mobile-release -- mobile-release mcp     # Claude Code
 | `doctor` | tools, configuration and credentials (names and stores, never values) |
 | `plan` | dry run of a release: every command, nothing built or published |
 | `qa` | local APK + simulator build, nothing published |
+| `adopt` | sets a project up (see above), **always after asking the user** |
 | `deploy` | builds and publishes, **always after asking the user** |
 
 `deploy` runs the plan and asks the user through MCP elicitation, showing that

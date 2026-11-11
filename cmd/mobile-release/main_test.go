@@ -68,3 +68,17 @@ func TestDescribeMissingNamesCIVariables(t *testing.T) {
 		}
 	}
 }
+
+func TestPeeledCommit(t *testing.T) {
+	annotated := "1111111111111111111111111111111111111111\trefs/tags/v2.1.0\n2222222222222222222222222222222222222222\trefs/tags/v2.1.0^{}\n"
+	if got := peeledCommit(annotated); got != "2222222222222222222222222222222222222222" {
+		t.Fatalf("annotated = %s", got)
+	}
+	lightweight := "3333333333333333333333333333333333333333\trefs/tags/v2.1.0\n"
+	if got := peeledCommit(lightweight); got != "3333333333333333333333333333333333333333" {
+		t.Fatalf("lightweight = %s", got)
+	}
+	if peeledCommit("") != "" {
+		t.Fatal("missing tag must give no commit")
+	}
+}
