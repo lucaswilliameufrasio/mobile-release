@@ -1,0 +1,164 @@
+# Shared lanes run by mobile-release. Every input comes from MOBILE_RELEASE_*
+# environment variables set by the CLI; paths are absolute. Do not edit in a
+# project: this file is embedded in the binary and written to a cache dir.
+
+def env!(name)
+  value = ENV[name].to_s
+  UI.user_error!("#{name} is not set (mobile-release passes it)") if value.empty?
+  value
+end
+
+def env_list(name)
+  ENV[name].to_s.split(",").map(&:strip).reject(&:empty?)
+end
+
+def write_output(value)
+  File.write(env!("MOBILE_RELEASE_OUTPUT_FILE"), value.to_s)
+end
+
+def app_store_key
+  return if ENV["MOBILE_RELEASE_APP_STORE_KEY_ID"].to_s.empty?
+
+  app_store_connect_api_key(
+    key_id: env!("MOBILE_RELEASE_APP_STORE_KEY_ID"),
+    issuer_id: env!("MOBILE_RELEASE_APP_STORE_ISSUER_ID"),
+    key_filepath: env!("MOBILE_RELEASE_APP_STORE_PRIVATE_KEY_PATH")
+  )
+end
+
+def firebase_upload(artifact_option, artifact_path)
+  firebase_app_distribution(
+    app: env!("MOBILE_RELEASE_FIREBASE_APP_ID"),
+    artifact_option => artifact_path,
+    groups: env_list("MOBILE_RELEASE_FIREBASE_GROUPS").join(","),
+    testers: env_list("MOBILE_RELEASE_FIREBASE_TESTERS").join(","),
+    release_notes: ENV["MOBILE_RELEASE_RELEASE_NOTES"].to_s,
+    service_credentials_file: env!("MOBILE_RELEASE_FIREBASE_SERVICE_ACCOUNT_PATH")
+  )
+end
+
+platform :android do
+  desc "Highest versionCode on any Play track, plus one"
+  lane :next_build_number do
+    codes = %w[production beta alpha internal].flat_map do |track|
+      google_play_track_version_codes(
+        track: track,
+        package_name: env!("MOBILE_RELEASE_ANDROID_PACKAGE_NAME"),
+        json_key: env!("MOBILE_RELEASE_GOOGLE_PLAY_JSON_PATH")
+      )
+    rescue StandardError => e
+      UI.message("No version codes on track #{track}: #{e.message}")
+      []
+    end
+    write_output(codes.map(&:to_i).max.to_i + 1)
+  end
+
+  desc "Upload an AAB to a Google Play track"
+  lane :play do
+    upload_to_play_store(
+      package_name: env!("MOBILE_RELEASE_ANDROID_PACKAGE_NAME"),
+      track: env!("MOBILE_RELEASE_ANDROID_TRACK"),
+      release_status: ENV.fetch("MOBILE_RELEASE_ANDROID_RELEASE_STATUS", "completed"),
+      aab: env!("MOBILE_RELEASE_ANDROID_AAB_PATH"),
+      json_key: env!("MOBILE_RELEASE_GOOGLE_PLAY_JSON_PATH"),
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Upload an APK to Firebase App Distribution"
+  lane :firebase do
+    firebase_upload(:android_artifact_path, env!("MOBILE_RELEASE_ANDROID_APK_PATH"))
+  end
+end
+
+platform :ios do
+  desc "Latest TestFlight build number, plus one"
+  lane :next_build_number do
+    app_store_key
+    latest = latest_testflight_build_number(
+      app_identifier: env!("MOBILE_RELEASE_IOS_BUNDLE_ID"),
+      initial_build_number: 0
+    )
+    write_output(latest.to_i + 1)
+  end
+
+  desc "Archive and export an IPA (match, automatic or manual signing)"
+  lane :build do
+    setup_ci if ENV["CI"] == "true"
+    app_store_key
+
+    method = env!("MOBILE_RELEASE_IOS_EXPORT_METHOD")
+    signing = env!("MOBILE_RELEASE_IOS_SIGNING")
+    team_id = ENV["MOBILE_RELEASE_IOS_TEAM_ID"].to_s
+    xcargs = ENV["MOBILE_RELEASE_IOS_XCARGS"].to_s
+    export_xcargs = ""
+
+    case signing
+    when "match"
+      match(
+        type: method == "ad-hoc" ? "adhoc" : "appstore",
+        readonly: ENV["MOBILE_RELEASE_MATCH_READONLY"] != "false",
+        app_identifier: env!("MOBILE_RELEASE_IOS_BUNDLE_ID"),
+        team_id: team_id.empty? ? nil : team_id
+      )
+    when "automatic"
+      auth = [
+        "-allowProvisioningUpdates",
+        "-authenticationKeyPath", env!("MOBILE_RELEASE_APP_STORE_PRIVATE_KEY_PATH").shellescape,
+        "-authenticationKeyID", env!("MOBILE_RELEASE_APP_STORE_KEY_ID"),
+        "-authenticationKeyIssuerID", env!("MOBILE_RELEASE_APP_STORE_ISSUER_ID")
+      ].join(" ")
+      xcargs = [xcargs, auth].reject(&:empty?).join(" ")
+      export_xcargs = auth
+    end
+
+    options = {
+      scheme: env!("MOBILE_RELEASE_IOS_SCHEME"),
+      configuration: ENV.fetch("MOBILE_RELEASE_IOS_CONFIGURATION", "Release"),
+      export_method: method,
+      output_directory: env!("MOBILE_RELEASE_IOS_OUTPUT_DIR"),
+      output_name: "app.ipa",
+      xcargs: xcargs,
+      export_xcargs: export_xcargs,
+      clean: true
+    }
+    options[:export_team_id] = team_id unless team_id.empty?
+    if ENV["MOBILE_RELEASE_IOS_WORKSPACE"].to_s.empty?
+      options[:project] = env!("MOBILE_RELEASE_IOS_PROJECT")
+    else
+      options[:workspace] = env!("MOBILE_RELEASE_IOS_WORKSPACE")
+    end
+    build_app(**options)
+  end
+
+  desc "Upload an IPA to TestFlight"
+  lane :testflight do
+    app_store_key
+    upload_to_testflight(
+      ipa: env!("MOBILE_RELEASE_IOS_IPA_PATH"),
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Upload an IPA and submit it for App Store review"
+  lane :app_store do
+    app_store_key
+    upload_to_app_store(
+      ipa: env!("MOBILE_RELEASE_IOS_IPA_PATH"),
+      submit_for_review: true,
+      automatic_release: false,
+      skip_metadata: true,
+      skip_screenshots: true,
+      precheck_include_in_app_purchases: false,
+      force: true
+    )
+  end
+
+  desc "Upload an IPA to Firebase App Distribution"
+  lane :firebase do
+    firebase_upload(:ipa_path, env!("MOBILE_RELEASE_IOS_IPA_PATH"))
+  end
+end

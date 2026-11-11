@@ -1,14 +1,33 @@
-schema_version = 1
+schema_version = 2
+
 [project]
 type = "flutter"
+
 [app]
 name = "Example Flutter"
+
 [android]
 package_name = "com.example.flutter"
-track = "internal"
+
 [ios]
-workspace = "ios/Runner.xcworkspace"
-scheme = "Runner"
-simulator_output = "build/ios/iphonesimulator/Runner.app"
-[artifacts]
-directory = "dist"
+bundle_id = "com.example.flutter"
+team_id = "ABCDE12345"
+signing = "match"
+
+# Testers: APK + ad-hoc IPA on Firebase App Distribution.
+[environments.staging]
+env_file = ".env"
+defines = { APP_COMMIT = "{commit}" }
+destinations = ["firebase"]
+
+[environments.staging.firebase]
+android_app_id = "1:000000000000:android:0000000000000000"
+ios_app_id = "1:000000000000:ios:0000000000000000"
+groups = ["internal-testers"]
+
+# Stores: AAB to Play internal and IPA to TestFlight, numbered from the store.
+[environments.production]
+env_file = ".env.production"
+defines = { APP_VARIANT = "production", APP_COMMIT = "{commit}" }
+build_number = "store"
+destinations = ["play", "testflight"]

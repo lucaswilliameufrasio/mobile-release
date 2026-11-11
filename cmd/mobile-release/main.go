@@ -1,83 +1,107 @@
+// Command mobile-release builds and distributes Flutter, Expo, Kotlin
+// Multiplatform and native mobile apps from a release.toml, asking for what
+// is missing instead of requiring environment variables.
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/project"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/release"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/runner"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/secrets"
 	"os"
-	"time"
+	"os/exec"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	"github.com/lucaswilliameufrasio/mobile-release/internal/tui"
 )
 
+// version is set with -ldflags "-X main.version=...".
+var version = "dev"
+
+const usage = `mobile-release — guided builds and releases for mobile apps
+
+Usage:
+  mobile-release init      detect the project and write release.toml
+  mobile-release setup     ask for missing credentials and store them
+  mobile-release doctor    check tools, configuration and credentials
+  mobile-release deploy    build and publish an environment
+  mobile-release qa        build an APK and an iOS simulator app
+  mobile-release version
+
+Common flags: -dir <project> -config <release.toml> -yes (never prompt)
+deploy/qa:    -env <name> -platform all|android|ios -dry-run -notes <text>
+
+Run "mobile-release <command> -h" for every flag.
+`
+
+var lookPath = exec.LookPath
+
 func main() {
-	cfgPath := flag.String("config", "release.toml", "config path")
-	platform := flag.String("platform", "all", "android, ios, or all")
-	flag.Parse()
-	if flag.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: mobile-release [flags] <doctor|qa|internal>")
-		os.Exit(2)
-	}
-	r := runner.Exec{Dir: ".", Out: os.Stdout, Err: os.Stderr}
-	if flag.Arg(0) == "doctor" {
-		for _, x := range []string{"git", "bundle"} {
-			if e := r.LookPath(x); e != nil {
-				fmt.Printf("missing: %s\n", x)
-			} else {
-				fmt.Printf("ok: %s\n", x)
-			}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx, os.Args[1:]); err != nil {
+		if errors.Is(err, tui.ErrCancelled) {
+			fmt.Fprintln(os.Stderr, "Cancelled.")
+			os.Exit(130)
 		}
-		return
-	}
-	switch flag.Arg(0) {
-	case "qa":
-	case "internal":
-		if *platform != "all" && *platform != "android" && *platform != "ios" {
-			fmt.Fprintf(os.Stderr, "invalid platform %q: use all, android, or ios\n", *platform)
-			os.Exit(2)
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
 		}
-	default:
-		fmt.Fprintln(os.Stderr, "usage: mobile-release [flags] <doctor|qa|internal>")
-		os.Exit(2)
-	}
-	fatal := func(name string, fn func() error) {
-		if e := fn(); e != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", name, e)
-			os.Exit(1)
-		}
-	}
-	c := config.Defaults()
-	fatal("load config", func() error {
-		var e error
-		c, e = config.Load(*cfgPath)
-		return e
-	})
-	c = config.Resolve(c)
-	if c.ProjectType == "" {
-		c.ProjectType = project.Detect(".")
-	}
-	fatal("validate config", func() error { return config.Validate(c) })
-	tmp, e := os.MkdirTemp("", "mobile-release-secrets-")
-	if e != nil {
-		fmt.Fprintf(os.Stderr, "temp dir: %v\n", e)
+		fmt.Fprintln(os.Stderr, "mobile-release:", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tmp)
-	fatal("materialize secrets", func() error { return secrets.ApplyAll(tmp) })
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
-	defer cancel()
-	s := release.Service{R: r, C: c}
-	switch flag.Arg(0) {
+}
+
+func run(ctx context.Context, args []string) error {
+	args = legacyArgs(args)
+	if len(args) == 0 {
+		fmt.Print(usage)
+		return nil
+	}
+	command, rest := args[0], args[1:]
+	switch command {
+	case "init":
+		return runInit(ctx, rest)
+	case "setup":
+		return runSetup(ctx, rest)
+	case "doctor":
+		return runDoctor(ctx, rest)
+	case "deploy":
+		return runDeploy(ctx, rest)
 	case "qa":
-		e = s.QA(ctx)
+		return runQA(ctx, rest)
+	case "version", "-version", "--version":
+		fmt.Println(version)
+		return nil
+	case "help", "-h", "--help":
+		fmt.Print(usage)
+		return nil
+	}
+	return fmt.Errorf("unknown command %q\n\n%s", command, usage)
+}
+
+// legacyArgs maps the v1 form `mobile-release [-config x] [-platform p]
+// <qa|internal>` to the current commands; schema v1 files become an
+// "internal" environment.
+func legacyArgs(args []string) []string {
+	if len(args) == 0 || !strings.HasPrefix(args[0], "-") {
+		return args
+	}
+	flags := flag.NewFlagSet("mobile-release", flag.ContinueOnError)
+	configPath := flags.String("config", "release.toml", "")
+	platform := flags.String("platform", "all", "")
+	if err := flags.Parse(args); err != nil || flags.NArg() == 0 {
+		return args
+	}
+	switch flags.Arg(0) {
 	case "internal":
-		e = s.Internal(ctx, *platform)
+		return []string{"deploy", "-config", *configPath, "-platform", *platform, "-env", "internal", "-yes"}
+	case "qa":
+		return []string{"qa", "-config", *configPath, "-platform", *platform}
+	case "doctor":
+		return []string{"doctor", "-config", *configPath}
 	}
-	if e != nil {
-		fmt.Fprintln(os.Stderr, e)
-		os.Exit(1)
-	}
+	return args
 }

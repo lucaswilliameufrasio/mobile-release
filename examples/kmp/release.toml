@@ -1,18 +1,23 @@
-schema_version = 1
+schema_version = 2
+
 [project]
 type = "kmp"
+
 [app]
 name = "Example KMP"
+
 [android]
 package_name = "com.example.kmp"
-track = "internal"
 apk_task = ":composeApp:assembleRelease"
 aab_task = ":composeApp:bundleRelease"
 apk_output = "composeApp/build/outputs/apk/release/*.apk"
 aab_output = "composeApp/build/outputs/bundle/release/*.aab"
+
 [ios]
-workspace = "iosApp/iosApp.xcworkspace"
+bundle_id = "com.example.kmp"
+project = "iosApp/iosApp.xcodeproj"
 scheme = "iosApp"
-simulator_output = "build/ios-simulator/Build/Products/Debug-iphonesimulator/iosApp.app"
-[artifacts]
-directory = "dist"
+
+[environments.internal]
+build_number = "store"
+destinations = ["play", "testflight"]
