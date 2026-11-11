@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/credentials"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/project"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/credentials"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/project"
 )
 
 func TestLegacyArgs(t *testing.T) {

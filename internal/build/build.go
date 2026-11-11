@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
 )
 
 // Kind is the artifact being produced.

@@ -99,7 +99,7 @@ jobs:
       - name: Install mobile-release
         env:
           VERSION: ${{ inputs.mobile-release-version }}
-        run: go install "github.com/lucaswilliameufrasio/mobile-release/cmd/mobile-release@${VERSION}"
+        run: go install "github.com/lucaswilliameufrasio/mobile-release/v2/cmd/mobile-release@${VERSION}"
 
       - name: Run mobile-release
         env:

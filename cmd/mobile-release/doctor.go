@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/credentials"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/credentials"
 )
 
 type tool struct {

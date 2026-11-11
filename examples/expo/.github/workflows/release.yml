@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   release:
-    uses: lucaswilliameufrasio/mobile-release/.github/workflows/reusable-release.yml@v2.0.0
+    uses: lucaswilliameufrasio/mobile-release/.github/workflows/reusable-release.yml@v2.0.1
     with:
       command: deploy
       environment: ${{ inputs.environment }}

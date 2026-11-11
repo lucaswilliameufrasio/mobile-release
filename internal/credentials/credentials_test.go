@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
 )
 
 // memory is a writable in-memory store.

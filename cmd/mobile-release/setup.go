@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/credentials"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/tui"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/credentials"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/tui"
 )
 
 func runSetup(ctx context.Context, args []string) error {

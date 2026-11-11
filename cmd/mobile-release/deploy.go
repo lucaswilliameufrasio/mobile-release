@@ -9,12 +9,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/credentials"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/fastlane"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/release"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/runner"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/tui"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/credentials"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/fastlane"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/release"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/runner"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/tui"
 )
 
 type deployFlags struct {
