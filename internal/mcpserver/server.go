@@ -130,6 +130,11 @@ type AdoptInput struct {
 	Workflow bool   `json:"workflow,omitempty" jsonschema:"also add .github/workflows/release.yml"`
 }
 
+type UpgradeInput struct {
+	Dir string `json:"dir,omitempty" jsonschema:"project root (default: the server's working directory)"`
+	To  string `json:"to,omitempty" jsonschema:"version to move to (default: the latest release of the installed major version)"`
+}
+
 type AdoptOutput struct {
 	Applied bool   `json:"applied"`
 	Reason  string `json:"reason,omitempty"`
@@ -183,6 +188,12 @@ func (s *Server) New() *mcp.Server {
 			".gitignore and optionally a release workflow. Never overwrites files. Always asks the user before writing.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(false)},
 	}, s.adopt)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "upgrade",
+		Description: "Move the project's mobile-release pins (managed Makefile block, release workflow) to the latest release and show what changed. " +
+			"Does not reinstall the CLI; it returns the install command. Always asks the user before writing.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(true)},
+	}, s.upgrade)
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "deploy",
 		Description: "Build and publish an environment (Firebase App Distribution, Google Play, TestFlight, App Store, OTA). " +
@@ -358,7 +369,31 @@ func (s *Server) deploy(ctx context.Context, request *mcp.CallToolRequest, in Re
 }
 
 func (s *Server) adopt(ctx context.Context, request *mcp.CallToolRequest, in AdoptInput) (*mcp.CallToolResult, AdoptOutput, error) {
-	dir := in.Dir
+	args := []string{"adopt", "-yes", fmt.Sprintf("-workflow=%t", in.Workflow)}
+	upToDate := func(plan string) bool { return strings.Contains(plan, "Nothing to change.") }
+	return s.changeFiles(ctx, request, in.Dir, args, upToDate, "the project is already set up", "adopt", fmt.Sprint(in.Workflow))
+}
+
+func (s *Server) upgrade(ctx context.Context, request *mcp.CallToolRequest, in UpgradeInput) (*mcp.CallToolResult, AdoptOutput, error) {
+	args := []string{"upgrade", "-yes"}
+	if in.To != "" {
+		args = append(args, "-to", in.To)
+	}
+	// Only file changes need an answer; a pending CLI install is reported.
+	upToDate := func(plan string) bool {
+		for _, line := range strings.Split(plan, "\n") {
+			if strings.HasPrefix(line, "  ~ ") || strings.HasPrefix(line, "  + ") {
+				return false
+			}
+		}
+		return true
+	}
+	return s.changeFiles(ctx, request, in.Dir, args, upToDate, "the project already pins this version (see plan for the CLI install command)", "upgrade", in.To)
+}
+
+// changeFiles runs a file-changing CLI command: plan (-dry-run), ask the
+// user, then apply. upToDate is the plan text meaning nothing to do.
+func (s *Server) changeFiles(ctx context.Context, request *mcp.CallToolRequest, dir string, args []string, upToDate func(string) bool, upToDateReason string, parts ...string) (*mcp.CallToolResult, AdoptOutput, error) {
 	if strings.TrimSpace(dir) == "" {
 		dir = "."
 	}
@@ -369,15 +404,14 @@ func (s *Server) adopt(ctx context.Context, request *mcp.CallToolRequest, in Ado
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return nil, AdoptOutput{}, fmt.Errorf("%s is not a directory", dir)
 	}
-	args := []string{"adopt", "-yes", fmt.Sprintf("-workflow=%t", in.Workflow)}
-	command := fmt.Sprintf("cd %q && mobile-release adopt", dir)
+	command := fmt.Sprintf("cd %q && mobile-release %s", dir, args[0])
 
-	plan := s.run(ctx, dir, append(args, "-dry-run"))
+	plan := s.run(ctx, dir, append(append([]string{}, args...), "-dry-run"))
 	if !plan.OK {
 		return nil, AdoptOutput{Reason: "the plan failed; see plan", Plan: plan.Output, Command: command}, nil
 	}
-	if strings.Contains(plan.Output, "Nothing to change.") {
-		return nil, AdoptOutput{Reason: "the project is already set up", Plan: plan.Output}, nil
+	if upToDate(plan.Output) {
+		return nil, AdoptOutput{Reason: upToDateReason, Plan: plan.Output}, nil
 	}
 	question := &mcp.ElicitParams{
 		Message: "mobile-release wants to change files in " + dir + ".\n\nPlan:\n" + tail(plan.Output, 6000),
@@ -393,7 +427,7 @@ func (s *Server) adopt(ctx context.Context, request *mcp.CallToolRequest, in Ado
 			"required": []string{"apply"},
 		},
 	}
-	g := s.gate(request, question, "adopt", dir, fmt.Sprint(in.Workflow))
+	g := s.gate(request, question, append(parts, dir)...)
 	switch {
 	case g.ask != nil:
 		return g.ask, AdoptOutput{}, nil
@@ -409,7 +443,7 @@ func (s *Server) adopt(ctx context.Context, request *mcp.CallToolRequest, in Ado
 	result := s.run(ctx, dir, args)
 	out := AdoptOutput{Applied: result.OK, Plan: plan.Output, Output: result.Output}
 	if !result.OK {
-		out.Reason = "adopt failed; see output"
+		out.Reason = args[0] + " failed; see output"
 	}
 	return nil, out, nil
 }
