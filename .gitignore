@@ -1,4 +1,4 @@
-# Secrets — nunca commitar
+# Secrets — never commit
 .env
 *.jks
 *.p12
@@ -7,17 +7,17 @@
 google-play*.json
 service-account*.json
 
-# Builds e artefatos
+# Builds and artifacts
 /bin/
 /dist/
 /build/
 
-# Ferramentas / SO
+# Tools / OS
 .DS_Store
 *.log
 
-# Outputs de teste locais
+# Local test outputs
 test-results.txt
 
-# Artefatos locais de desenvolvimento
+# Local development artifacts
 dev-artifacts/
