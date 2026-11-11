@@ -388,3 +388,44 @@ func TestAdoptUpToDateDoesNotAsk(t *testing.T) {
 		t.Fatalf("asked=%v out=%+v", asked, out)
 	}
 }
+
+func TestUpgradeAsksOnlyForFileChanges(t *testing.T) {
+	plans := map[bool]string{
+		true:  "mobile-release v2.2.0\n\nProject\n  ~ Makefile: managed block refreshed\n\nDry run: nothing was changed.",
+		false: "mobile-release v2.2.0\n\nProject\n  = Makefile: skipped (already up to date)\n\nCLI: would run `go install x@v2.2.0`\n\nDry run: nothing was changed.",
+	}
+	for pending, plan := range plans {
+		asked := false
+		var calls [][]string
+		exec := func(_ context.Context, _ string, args []string) (string, error) {
+			calls = append(calls, args)
+			if strings.Contains(strings.Join(args, " "), "-dry-run") {
+				return plan, nil
+			}
+			return "Project pinned to v2.2.0.", nil
+		}
+		server := (&Server{Version: "test", Exec: exec}).New()
+		serverTransport, clientTransport := mcp.NewInMemoryTransports()
+		if _, err := server.Connect(context.Background(), serverTransport, nil); err != nil {
+			t.Fatal(err)
+		}
+		session, err := mcp.NewClient(&mcp.Implementation{Name: "c"}, &mcp.ClientOptions{
+			ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				asked = true
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"apply": true}}, nil
+			},
+		}).Connect(context.Background(), clientTransport, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out AdoptOutput
+		call(t, session, "upgrade", map[string]any{"dir": t.TempDir()}, &out)
+		session.Close()
+		if asked != pending || out.Applied != pending {
+			t.Fatalf("pending=%v asked=%v out=%+v calls=%v", pending, asked, out, calls)
+		}
+		if pending && strings.Join(calls[len(calls)-1], " ") != "upgrade -yes" {
+			t.Fatalf("apply call = %v", calls[len(calls)-1])
+		}
+	}
+}

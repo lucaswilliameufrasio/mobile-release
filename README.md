@@ -45,6 +45,14 @@ needed, adds a managed Makefile block that pins the CLI version
 manual release workflow pinned to the release's commit. It shows the plan,
 asks before writing and never overwrites: hand-written targets or an existing
 workflow are reported and left alone.
+
+`mobile-release upgrade` moves to the latest release of the installed major
+version: it shows the installed and pinned versions and the release notes in
+between, refreshes the managed Makefile block and the release workflow pins
+(commit and version) after asking, and installs the new CLI only when you
+confirm (or pass `-install`). `-to vX.Y.Z` picks a version; `-dry-run` only
+prints. New major versions change the module path, so they are announced but
+never applied automatically.
 `mobile-release qa` builds an APK and a simulator app without release signing.
 
 ## release.toml
@@ -182,6 +190,7 @@ claude mcp add mobile-release -- mobile-release mcp     # Claude Code
 | `plan` | dry run of a release: every command, nothing built or published |
 | `qa` | local APK + simulator build, nothing published |
 | `adopt` | sets a project up (see above), **always after asking the user** |
+| `upgrade` | moves the project pins to the latest release, **always after asking the user**; returns the CLI install command |
 | `deploy` | builds and publishes, **always after asking the user** |
 
 `deploy` runs the plan and asks the user through MCP elicitation, showing that
