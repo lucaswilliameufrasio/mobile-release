@@ -11,14 +11,26 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/mcpserver"
 	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/tui"
 )
 
-// version is set with -ldflags "-X main.version=...".
+// version is set with -ldflags "-X main.version=..."; go install builds
+// report their module version instead.
 var version = "dev"
+
+func init() {
+	if version != "dev" {
+		return
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		version = info.Main.Version
+	}
+}
 
 const usage = `mobile-release — guided builds and releases for mobile apps
 
@@ -28,6 +40,7 @@ Usage:
   mobile-release doctor    check tools, configuration and credentials
   mobile-release deploy    build and publish an environment
   mobile-release qa        build an APK and an iOS simulator app
+  mobile-release mcp       serve the tools to agents over MCP (stdio)
   mobile-release version
 
 Common flags: -dir <project> -config <release.toml> -yes (never prompt)
@@ -72,6 +85,8 @@ func run(ctx context.Context, args []string) error {
 		return runDeploy(ctx, rest)
 	case "qa":
 		return runQA(ctx, rest)
+	case "mcp":
+		return (&mcpserver.Server{Version: version}).Run(ctx)
 	case "version", "-version", "--version":
 		fmt.Println(version)
 		return nil
