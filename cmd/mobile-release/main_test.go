@@ -82,3 +82,9 @@ func TestPeeledCommit(t *testing.T) {
 		t.Fatal("missing tag must give no commit")
 	}
 }
+
+func TestLessTag(t *testing.T) {
+	if !lessTag("v2.2.0", "v2.3.0") || lessTag("v2.3.0", "v2.2.0") || lessTag("dev", "v2.3.0") {
+		t.Fatal("lessTag ordering")
+	}
+}

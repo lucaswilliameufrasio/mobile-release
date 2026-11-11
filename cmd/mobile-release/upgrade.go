@@ -73,6 +73,10 @@ func runUpgrade(ctx context.Context, args []string) error {
 
 	a.printf("mobile-release %s\n", target)
 	a.printf("  installed CLI:  %s\n", installed)
+	newerCLI := installedOK && lessTag(target, installed)
+	if newerCLI {
+		a.printf("  (the installed CLI is newer than the latest listed release; the list can lag about a minute behind a new release)\n")
+	}
 	if inProject {
 		a.printf("  project pins:   Makefile %s, workflow %s\n", orDash(pins.Makefile), orDash(pins.Workflow))
 	}
@@ -102,7 +106,14 @@ func runUpgrade(ctx context.Context, args []string) error {
 	installNeeded := !installedOK || lessTag(installed, target)
 	installCommand := "go install " + adopt.Module + "@" + target
 	if !adopt.Pending(changes) && !installNeeded {
-		a.printf("\nAlready on %s.\n", target)
+		switch {
+		case newerCLI && inProject:
+			a.printf("\nNothing to change: the project pins the latest release and the CLI is newer.\n")
+		case newerCLI:
+			a.printf("\nNothing to change: the CLI is newer than the latest release.\n")
+		default:
+			a.printf("\nAlready on %s.\n", target)
+		}
 		return nil
 	}
 	if *dryRun {
