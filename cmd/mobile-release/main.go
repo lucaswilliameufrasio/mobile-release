@@ -35,6 +35,7 @@ func init() {
 const usage = `mobile-release — guided builds and releases for mobile apps
 
 Usage:
+  mobile-release adopt     set a project up: release.toml, pinned CLI, Makefile, CI
   mobile-release init      detect the project and write release.toml
   mobile-release setup     ask for missing credentials and store them
   mobile-release doctor    check tools, configuration and credentials
@@ -75,6 +76,8 @@ func run(ctx context.Context, args []string) error {
 	}
 	command, rest := args[0], args[1:]
 	switch command {
+	case "adopt":
+		return runAdopt(ctx, rest)
 	case "init":
 		return runInit(ctx, rest)
 	case "setup":

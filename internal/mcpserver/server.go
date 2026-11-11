@@ -125,6 +125,19 @@ type TextOutput struct {
 	Output string `json:"output"`
 }
 
+type AdoptInput struct {
+	Dir      string `json:"dir,omitempty" jsonschema:"project root (default: the server's working directory)"`
+	Workflow bool   `json:"workflow,omitempty" jsonschema:"also add .github/workflows/release.yml"`
+}
+
+type AdoptOutput struct {
+	Applied bool   `json:"applied"`
+	Reason  string `json:"reason,omitempty"`
+	Plan    string `json:"plan,omitempty"`
+	Output  string `json:"output,omitempty"`
+	Command string `json:"command,omitempty"`
+}
+
 type DeployOutput struct {
 	Published bool   `json:"published"`
 	Reason    string `json:"reason,omitempty"`
@@ -164,6 +177,12 @@ func (s *Server) New() *mcp.Server {
 		Description: "Build an APK and an iOS simulator app locally without release signing. Publishes nothing. Can take several minutes.",
 		Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, s.qa)
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "adopt",
+		Description: "Set a project up for mobile-release: release.toml (detected), a managed Makefile block pinning the CLI version, " +
+			".gitignore and optionally a release workflow. Never overwrites files. Always asks the user before writing.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(false)},
+	}, s.adopt)
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "deploy",
 		Description: "Build and publish an environment (Firebase App Distribution, Google Play, TestFlight, App Store, OTA). " +
@@ -319,34 +338,14 @@ func (s *Server) deploy(ctx context.Context, request *mcp.CallToolRequest, in Re
 	if !plan.OK {
 		return nil, DeployOutput{Reason: "the release plan failed; fix it before publishing", Plan: plan.Output, Command: command}, nil
 	}
-	if !clientCanAsk(request) {
-		return nil, DeployOutput{
-			Reason:  "this MCP client cannot ask the user to confirm, so nothing was published; run the command in a terminal",
-			Plan:    plan.Output,
-			Command: command,
-		}, nil
+	g := s.gate(request, confirmation(env, platform, plan.Output), "deploy", dir, in.Environment, platform, in.Notes)
+	switch {
+	case g.ask != nil:
+		return g.ask, DeployOutput{}, nil
+	case g.refusal != "":
+		return nil, DeployOutput{Reason: g.refusal + ", so nothing was published", Plan: plan.Output, Command: command}, nil
 	}
-
-	state := s.requestState(dir, in, platform)
-	var responses mcp.InputResponseMap
-	var echoed string
-	if request != nil && request.Params != nil {
-		responses = request.Params.InputResponses
-		echoed = request.Params.RequestState
-	}
-	if len(responses) == 0 {
-		// First round: ask the user (the SDK falls back to elicitation/create
-		// for clients on older protocol versions).
-		return &mcp.CallToolResult{
-			InputRequests: mcp.InputRequestMap{confirmID: confirmation(env, platform, plan.Output)},
-			RequestState:  state,
-		}, DeployOutput{}, nil
-	}
-	if !hmac.Equal([]byte(echoed), []byte(state)) {
-		return nil, DeployOutput{Reason: "the confirmation does not belong to this release request; nothing was published", Plan: plan.Output, Command: command}, nil
-	}
-	answer, _ := responses[confirmID].(*mcp.ElicitResult)
-	if accepted, reason := evaluate(env, answer); !accepted {
+	if accepted, reason := evaluate(env, g.answer); !accepted {
 		return nil, DeployOutput{Reason: reason, Plan: plan.Output, Command: command}, nil
 	}
 
@@ -354,6 +353,63 @@ func (s *Server) deploy(ctx context.Context, request *mcp.CallToolRequest, in Re
 	out := DeployOutput{Published: result.OK, Plan: plan.Output, Output: result.Output}
 	if !result.OK {
 		out.Reason = "the release failed; see output"
+	}
+	return nil, out, nil
+}
+
+func (s *Server) adopt(ctx context.Context, request *mcp.CallToolRequest, in AdoptInput) (*mcp.CallToolResult, AdoptOutput, error) {
+	dir := in.Dir
+	if strings.TrimSpace(dir) == "" {
+		dir = "."
+	}
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, AdoptOutput{}, err
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return nil, AdoptOutput{}, fmt.Errorf("%s is not a directory", dir)
+	}
+	args := []string{"adopt", "-yes", fmt.Sprintf("-workflow=%t", in.Workflow)}
+	command := fmt.Sprintf("cd %q && mobile-release adopt", dir)
+
+	plan := s.run(ctx, dir, append(args, "-dry-run"))
+	if !plan.OK {
+		return nil, AdoptOutput{Reason: "the plan failed; see plan", Plan: plan.Output, Command: command}, nil
+	}
+	if strings.Contains(plan.Output, "Nothing to change.") {
+		return nil, AdoptOutput{Reason: "the project is already set up", Plan: plan.Output}, nil
+	}
+	question := &mcp.ElicitParams{
+		Message: "mobile-release wants to change files in " + dir + ".\n\nPlan:\n" + tail(plan.Output, 6000),
+		RequestedSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"apply": map[string]any{
+					"type":        "boolean",
+					"title":       "Apply these changes?",
+					"description": "Nothing is written unless this is checked.",
+				},
+			},
+			"required": []string{"apply"},
+		},
+	}
+	g := s.gate(request, question, "adopt", dir, fmt.Sprint(in.Workflow))
+	switch {
+	case g.ask != nil:
+		return g.ask, AdoptOutput{}, nil
+	case g.refusal != "":
+		return nil, AdoptOutput{Reason: g.refusal + ", so nothing was written", Plan: plan.Output, Command: command}, nil
+	}
+	if g.answer == nil || g.answer.Action != "accept" {
+		return nil, AdoptOutput{Reason: "the user did not accept; nothing was written", Plan: plan.Output, Command: command}, nil
+	}
+	if apply, _ := g.answer.Content["apply"].(bool); !apply {
+		return nil, AdoptOutput{Reason: "the user did not confirm; nothing was written", Plan: plan.Output, Command: command}, nil
+	}
+	result := s.run(ctx, dir, args)
+	out := AdoptOutput{Applied: result.OK, Plan: plan.Output, Output: result.Output}
+	if !result.OK {
+		out.Reason = "adopt failed; see output"
 	}
 	return nil, out, nil
 }
@@ -366,9 +422,45 @@ func clientCanAsk(request *mcp.CallToolRequest) bool {
 	return params != nil && params.Capabilities != nil && params.Capabilities.Elicitation != nil
 }
 
-// requestState binds a confirmation to one release request. It is signed
-// with a per-process key because the client echoes it back.
-func (s *Server) requestState(dir string, in ReleaseInput, platform string) string {
+// gateResult is the outcome of asking the user before acting.
+type gateResult struct {
+	// ask, when set, is returned to the client to ask the user (first round;
+	// the SDK falls back to elicitation/create for older clients).
+	ask *mcp.CallToolResult
+	// refusal, when set, explains why the action must not happen.
+	refusal string
+	answer  *mcp.ElicitResult
+}
+
+// gate asks question once per request and returns the user's answer on the
+// retry. The request state is signed over parts, so an answer only applies
+// to the request that asked for it.
+func (s *Server) gate(request *mcp.CallToolRequest, question *mcp.ElicitParams, parts ...string) gateResult {
+	if !clientCanAsk(request) {
+		return gateResult{refusal: "this MCP client cannot ask the user to confirm; run the command in a terminal"}
+	}
+	state := s.sign(parts...)
+	var responses mcp.InputResponseMap
+	echoed := ""
+	if request.Params != nil {
+		responses = request.Params.InputResponses
+		echoed = request.Params.RequestState
+	}
+	if len(responses) == 0 {
+		return gateResult{ask: &mcp.CallToolResult{
+			InputRequests: mcp.InputRequestMap{confirmID: question},
+			RequestState:  state,
+		}}
+	}
+	if !hmac.Equal([]byte(echoed), []byte(state)) {
+		return gateResult{refusal: "the confirmation does not belong to this request"}
+	}
+	answer, _ := responses[confirmID].(*mcp.ElicitResult)
+	return gateResult{answer: answer}
+}
+
+// sign is an HMAC with a per-process key; the client echoes it back.
+func (s *Server) sign(parts ...string) string {
 	s.keyOnce.Do(func() {
 		s.key = make([]byte, 32)
 		if _, err := rand.Read(s.key); err != nil {
@@ -376,7 +468,7 @@ func (s *Server) requestState(dir string, in ReleaseInput, platform string) stri
 		}
 	})
 	mac := hmac.New(sha256.New, s.key)
-	mac.Write([]byte(strings.Join([]string{dir, in.Environment, platform, in.Notes}, "\x00")))
+	mac.Write([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
