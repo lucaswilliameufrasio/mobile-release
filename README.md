@@ -19,7 +19,7 @@ in CI.
 ## Installation
 
 ```bash
-go install github.com/lucaswilliameufrasio/mobile-release/cmd/mobile-release@latest
+go install github.com/lucaswilliameufrasio/mobile-release/v2/cmd/mobile-release@latest
 ```
 
 Requires Ruby ≥ 3.2 with Bundler (fastlane gems are kept in the user cache)
@@ -162,7 +162,7 @@ The reusable workflow installs the CLI and runs `deploy` without prompts
 ```yaml
 jobs:
   release:
-    uses: lucaswilliameufrasio/mobile-release/.github/workflows/reusable-release.yml@v2.0.0
+    uses: lucaswilliameufrasio/mobile-release/.github/workflows/reusable-release.yml@v2.0.1
     with:
       environment: staging
       platform: android

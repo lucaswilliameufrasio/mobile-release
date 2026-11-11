@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/runner"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/runner"
 )
 
 //go:embed assets/Gemfile assets/Gemfile.lock assets/fastlane/Fastfile assets/fastlane/Pluginfile

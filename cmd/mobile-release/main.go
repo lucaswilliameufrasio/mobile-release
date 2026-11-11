@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/tui"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/tui"
 )
 
 // version is set with -ldflags "-X main.version=...".

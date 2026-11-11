@@ -12,7 +12,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
 )
 
 // Info is what could be read from the project; empty fields were not found.

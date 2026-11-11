@@ -1,4 +1,4 @@
-module github.com/lucaswilliameufrasio/mobile-release
+module github.com/lucaswilliameufrasio/mobile-release/v2
 
 go 1.27
 

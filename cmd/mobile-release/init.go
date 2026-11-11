@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/project"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/tui"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/project"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/tui"
 )
 
 const configHeader = `# mobile-release configuration. Commit this file: it holds no secrets.

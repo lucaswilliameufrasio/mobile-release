@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
 )
 
 // Kind tells how a credential is stored and used.

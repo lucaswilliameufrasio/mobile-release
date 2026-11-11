@@ -14,9 +14,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/build"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/runner"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/build"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/runner"
 )
 
 // Provider builds one project type.

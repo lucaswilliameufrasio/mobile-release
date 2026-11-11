@@ -3,9 +3,9 @@ package providers
 import (
 	"context"
 
-	"github.com/lucaswilliameufrasio/mobile-release/internal/build"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/config"
-	"github.com/lucaswilliameufrasio/mobile-release/internal/runner"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/build"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/runner"
 )
 
 // Flutter builds with the flutter tool. Defines and the env_file become
