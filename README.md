@@ -154,6 +154,36 @@ get = ["op", "read", "op://Private/{key}"]  # prints the value
 Placeholders: `{app}`, `{env}`, `{id}` and `{key}` (`app/env/id`). Files are
 stored base64-encoded.
 
+## Agents (MCP)
+
+`mobile-release mcp` serves the CLI to agents over the Model Context Protocol
+(stdio):
+
+```bash
+claude mcp add mobile-release -- mobile-release mcp     # Claude Code
+```
+
+```json
+{ "mcpServers": { "mobile-release": { "command": "mobile-release", "args": ["mcp"] } } }
+```
+
+| Tool | What it does |
+| --- | --- |
+| `environments` | environments, destinations and build number strategy of a project |
+| `doctor` | tools, configuration and credentials (names and stores, never values) |
+| `plan` | dry run of a release: every command, nothing built or published |
+| `qa` | local APK + simulator build, nothing published |
+| `deploy` | builds and publishes, **always after asking the user** |
+
+`deploy` runs the plan and asks the user through MCP elicitation, showing that
+plan; store destinations also require typing the environment name. Nothing is
+published on a decline, a cancel, a mismatched name, or when the client cannot
+ask, in which case the plan and the terminal command are returned instead. The
+confirmation is bound to the request that asked for it, and every tool runs the
+CLI itself, so agents get the same checks and credential stores as a terminal.
+Credentials are never returned to the agent: when some are missing, run
+`mobile-release setup` in a terminal.
+
 ## CI
 
 The reusable workflow installs the CLI and runs `deploy` without prompts
