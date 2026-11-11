@@ -8,9 +8,9 @@ google-play*.json
 service-account*.json
 
 # Builds e artefatos
-bin/
-dist/
-build/
+/bin/
+/dist/
+/build/
 
 # Ferramentas / SO
 .DS_Store

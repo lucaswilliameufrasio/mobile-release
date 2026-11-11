@@ -1,19 +1,28 @@
 name: Mobile Release
+
 on:
   workflow_dispatch:
     inputs:
-      command:
-        type: choice
-        options: [qa, internal]
+      environment:
+        description: Environment from release.toml
+        type: string
         required: true
       platform:
         type: choice
         options: [all, android, ios]
         default: all
+
+permissions:
+  contents: read
+
 jobs:
   release:
-    uses: your-org/mobile-release/.github/workflows/reusable-release.yml@v1
+    uses: lucaswilliameufrasio/mobile-release/.github/workflows/reusable-release.yml@v2.0.0
     with:
-      command: ${{ inputs.command }}
+      command: deploy
+      environment: ${{ inputs.environment }}
       platform: ${{ inputs.platform }}
+      # Android-only releases can run on ubuntu-latest.
+      runner: macos-26
+
     secrets: inherit

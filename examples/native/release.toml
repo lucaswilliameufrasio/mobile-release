@@ -1,0 +1,33 @@
+schema_version = 2
+
+# Plain Gradle (android/) and Xcode (ios/) projects.
+[project]
+type = "native"
+
+[app]
+name = "Example Native"
+
+[android]
+package_name = "com.example.native"
+# The Gradle project already signs release builds (e.g. key.properties).
+signing = "project"
+
+[ios]
+bundle_id = "com.example.native"
+workspace = "ios/ExampleNative.xcworkspace"
+scheme = "ExampleNative"
+
+# Extra steps before the builds, run from the project root.
+[prepare]
+ios = ["bundle exec pod install --project-directory=ios"]
+
+[environments.beta]
+destinations = ["firebase"]
+
+[environments.beta.firebase]
+android_app_id = "1:000000000000:android:0000000000000000"
+ios_app_id = "1:000000000000:ios:0000000000000000"
+
+[environments.production]
+build_number = "store"
+destinations = ["play", "testflight"]
