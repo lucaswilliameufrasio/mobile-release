@@ -429,3 +429,40 @@ func TestUpgradeAsksOnlyForFileChanges(t *testing.T) {
 		}
 	}
 }
+
+func TestMigrateAsksOnlyWhenThereIsSomethingToMigrate(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		asked := false
+		var calls []string
+		exec := func(_ context.Context, _ string, args []string) (string, error) {
+			calls = append(calls, strings.Join(args, " "))
+			if !strings.Contains(strings.Join(args, " "), "-dry-run") {
+				return "Wrote release.toml", nil
+			}
+			if pending {
+				return "release.toml (schema 2)\n  - 3: groups = [\"internal-testers\"]\n\nDry run: nothing was written.", nil
+			}
+			return "release.toml (schema 2)\n\nNothing to migrate.", nil
+		}
+		server := (&Server{Version: "test", Exec: exec}).New()
+		serverTransport, clientTransport := mcp.NewInMemoryTransports()
+		if _, err := server.Connect(context.Background(), serverTransport, nil); err != nil {
+			t.Fatal(err)
+		}
+		session, err := mcp.NewClient(&mcp.Implementation{Name: "c"}, &mcp.ClientOptions{
+			ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				asked = true
+				return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"apply": true}}, nil
+			},
+		}).Connect(context.Background(), clientTransport, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out AdoptOutput
+		call(t, session, "migrate", map[string]any{"dir": t.TempDir()}, &out)
+		session.Close()
+		if asked != pending || out.Applied != pending {
+			t.Fatalf("pending=%v asked=%v out=%+v calls=%v", pending, asked, out, calls)
+		}
+	}
+}

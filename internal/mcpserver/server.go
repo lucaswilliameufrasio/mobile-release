@@ -195,6 +195,12 @@ func (s *Server) New() *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(true)},
 	}, s.upgrade)
 	mcp.AddTool(server, &mcp.Tool{
+		Name: "migrate",
+		Description: "Bring release.toml to the current schema: rewrite schema 1 files and drop keys equal to their defaults, keeping comments. " +
+			"The effective configuration never changes. Always asks the user before writing.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(false)},
+	}, s.migrate)
+	mcp.AddTool(server, &mcp.Tool{
 		Name: "deploy",
 		Description: "Build and publish an environment (Firebase App Distribution, Google Play, TestFlight, App Store, OTA). " +
 			"Always asks the user to confirm the plan first; nothing is published without that answer. Can take several minutes.",
@@ -372,6 +378,11 @@ func (s *Server) adopt(ctx context.Context, request *mcp.CallToolRequest, in Ado
 	args := []string{"adopt", "-yes", fmt.Sprintf("-workflow=%t", in.Workflow)}
 	upToDate := func(plan string) bool { return strings.Contains(plan, "Nothing to change.") }
 	return s.changeFiles(ctx, request, in.Dir, args, upToDate, "the project is already set up", "adopt", fmt.Sprint(in.Workflow))
+}
+
+func (s *Server) migrate(ctx context.Context, request *mcp.CallToolRequest, in ProjectInput) (*mcp.CallToolResult, AdoptOutput, error) {
+	upToDate := func(plan string) bool { return strings.Contains(plan, "Nothing to migrate.") }
+	return s.changeFiles(ctx, request, in.Dir, []string{"migrate", "-yes"}, upToDate, "release.toml already follows the current schema", "migrate")
 }
 
 func (s *Server) upgrade(ctx context.Context, request *mcp.CallToolRequest, in UpgradeInput) (*mcp.CallToolResult, AdoptOutput, error) {

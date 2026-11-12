@@ -46,6 +46,13 @@ manual release workflow pinned to the release's commit. It shows the plan,
 asks before writing and never overwrites: hand-written targets or an existing
 workflow are reported and left alone.
 
+`mobile-release migrate` brings `release.toml` to the current schema: schema 1
+files are rewritten (comments cannot be kept), and in schema 2 files keys equal
+to their default are removed line by line, keeping comments, unless a comment
+documents them. It refuses any result that would change the effective
+configuration, lists what needs your attention (e.g. a bundle id that schema 1
+never had) and asks before writing.
+
 `mobile-release upgrade` moves to the latest release of the installed major
 version: it shows the installed and pinned versions and the release notes in
 between, refreshes the managed Makefile block and the release workflow pins
@@ -100,6 +107,7 @@ destinations = ["play", "testflight"]
 | `env_file` | Flutter: `--dart-define-from-file`; others: build environment variables (e.g. `EXPO_PUBLIC_*`) |
 | `defines` | Flutter: `--dart-define`; others: environment. Supports `{commit}`, `{build_number}` and `{env}` |
 | `[prepare]` | `all`, `android`, `ios`: shell commands run before the builds, with the environment's defines |
+| `[environments.<name>.prepare]` | same keys, only for that environment, after the global ones (e.g. per-environment app icons) |
 | `confirm` | environments with `play`, `testflight` or `app-store` require typing the environment name by default |
 
 Unknown keys are errors (typos never become silent defaults) and validation
@@ -191,6 +199,7 @@ claude mcp add mobile-release -- mobile-release mcp     # Claude Code
 | `qa` | local APK + simulator build, nothing published |
 | `adopt` | sets a project up (see above), **always after asking the user** |
 | `upgrade` | moves the project pins to the latest release, **always after asking the user**; returns the CLI install command |
+| `migrate` | brings `release.toml` to the current schema, **always after asking the user** |
 | `deploy` | builds and publishes, **always after asking the user** |
 
 `deploy` runs the plan and asks the user through MCP elicitation, showing that

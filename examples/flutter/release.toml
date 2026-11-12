@@ -23,7 +23,10 @@ destinations = ["firebase"]
 [environments.staging.firebase]
 android_app_id = "1:000000000000:android:0000000000000000"
 ios_app_id = "1:000000000000:ios:0000000000000000"
-groups = ["internal-testers"]
+
+# Commands that run only for this environment, after the global [prepare].
+[environments.staging.prepare]
+all = ["dart run flutter_launcher_icons -f flutter_launcher_icons-staging.yaml"]
 
 # Stores: AAB to Play internal and IPA to TestFlight, numbered from the store.
 [environments.production]
@@ -31,3 +34,6 @@ env_file = ".env.production"
 defines = { APP_VARIANT = "production", APP_COMMIT = "{commit}" }
 build_number = "store"
 destinations = ["play", "testflight"]
+
+[environments.production.prepare]
+all = ["dart run flutter_launcher_icons -f flutter_launcher_icons-production.yaml"]

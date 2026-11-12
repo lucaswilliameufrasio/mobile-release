@@ -136,6 +136,9 @@ type Environment struct {
 	OTA          OTA               `toml:"ota,omitempty"`
 	// Confirm requires typing the environment name before publishing.
 	Confirm *bool `toml:"confirm,omitempty"`
+	// Prepare adds commands that run only for this environment, after the
+	// global [prepare] ones of the same step.
+	Prepare Prepare `toml:"prepare,omitempty"`
 }
 
 type Firebase struct {

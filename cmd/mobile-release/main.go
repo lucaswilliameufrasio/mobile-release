@@ -37,6 +37,7 @@ const usage = `mobile-release — guided builds and releases for mobile apps
 Usage:
   mobile-release adopt     set a project up: release.toml, pinned CLI, Makefile, CI
   mobile-release upgrade   move the CLI and the project pins to the latest release
+  mobile-release migrate   bring release.toml to the current schema and drop defaults
   mobile-release init      detect the project and write release.toml
   mobile-release setup     ask for missing credentials and store them
   mobile-release doctor    check tools, configuration and credentials
@@ -81,6 +82,8 @@ func run(ctx context.Context, args []string) error {
 		return runAdopt(ctx, rest)
 	case "upgrade":
 		return runUpgrade(ctx, rest)
+	case "migrate":
+		return runMigrate(ctx, rest)
 	case "init":
 		return runInit(ctx, rest)
 	case "setup":

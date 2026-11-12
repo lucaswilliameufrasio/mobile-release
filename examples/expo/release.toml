@@ -24,10 +24,6 @@ destinations = ["firebase", "ota"]
 android_app_id = "1:000000000000:android:0000000000000000"
 ios_app_id = "1:000000000000:ios:0000000000000000"
 
-[environments.preview.ota]
-mode = "eas"
-channel = "preview"
-
 [environments.production]
 env_file = ".env.production"
 build_number = "store"
@@ -37,5 +33,4 @@ destinations = ["play", "testflight", "ota"]
 # command, which receives MOBILE_RELEASE_OTA_DIR and MOBILE_RELEASE_OTA_CHANNEL.
 [environments.production.ota]
 mode = "command"
-channel = "production"
 command = "./scripts/publish-update.sh"
