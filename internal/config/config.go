@@ -139,6 +139,9 @@ type Environment struct {
 	// Prepare adds commands that run only for this environment, after the
 	// global [prepare] ones of the same step.
 	Prepare Prepare `toml:"prepare,omitempty"`
+	// Worktree builds in a temporary git worktree of HEAD, so prepare
+	// commands never change the developer's checkout.
+	Worktree *bool `toml:"worktree,omitempty"`
 }
 
 type Firebase struct {
@@ -585,6 +588,11 @@ func (e *Environment) Has(destination string) bool {
 		}
 	}
 	return false
+}
+
+// UsesWorktree reports whether builds run in a temporary worktree.
+func (e *Environment) UsesWorktree() bool {
+	return e != nil && e.Worktree != nil && *e.Worktree
 }
 
 // NeedsConfirmation defaults to true for environments that publish to stores.

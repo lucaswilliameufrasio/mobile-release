@@ -22,7 +22,7 @@ in CI.
 go install github.com/lucaswilliameufrasio/mobile-release/v2/cmd/mobile-release@latest
 ```
 
-Requires Ruby ≥ 3.2 with Bundler (fastlane gems are kept in the user cache)
+Requires Ruby ≥ 3.2 (4.0 recommended) with Bundler (fastlane gems are kept in the user cache)
 and your project's tools (Flutter, Node, JDK, Xcode). `mobile-release doctor`
 lists what is missing and how to install it.
 
@@ -108,6 +108,7 @@ destinations = ["play", "testflight"]
 | `defines` | Flutter: `--dart-define`; others: environment. Supports `{commit}`, `{build_number}` and `{env}` |
 | `[prepare]` | `all`, `android`, `ios`: shell commands run before the builds, with the environment's defines |
 | `[environments.<name>.prepare]` | same keys, only for that environment, after the global ones (e.g. per-environment app icons) |
+| `worktree = true` (per environment, or `-worktree`) | builds in a temporary git worktree of HEAD: prepare commands can change files without touching your checkout; the env_file is copied in, artifacts are copied back to `dist/`, and uncommitted changes are not included |
 | `confirm` | environments with `play`, `testflight` or `app-store` require typing the environment name by default |
 
 Unknown keys are errors (typos never become silent defaults) and validation

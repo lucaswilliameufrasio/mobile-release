@@ -218,7 +218,7 @@ func WorkflowFile(c config.Config, version, ref, flutterVersionFile string) stri
 	case config.TypeFlutter:
 		extra = append(extra, "      flutter-version-file: "+flutterVersionFile)
 	case config.TypeExpo:
-		extra = append(extra, "      node-version: '24'")
+		extra = append(extra, "      node-version: '26'")
 	}
 	if c.AndroidEnabled() {
 		extra = append(extra, "      java-version: '21'")

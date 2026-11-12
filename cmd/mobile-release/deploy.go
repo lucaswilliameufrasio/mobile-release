@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/release"
 	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/runner"
 	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/tui"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/worktree"
 )
 
 type deployFlags struct {
@@ -24,6 +26,7 @@ type deployFlags struct {
 	dryRun     bool
 	notes      string
 	allowDirty bool
+	worktree   bool
 }
 
 func parseDeployFlags(name string, args []string) (deployFlags, error) {
@@ -35,6 +38,7 @@ func parseDeployFlags(name string, args []string) (deployFlags, error) {
 	flags.BoolVar(&parsed.dryRun, "dry-run", false, "print the commands without running them")
 	flags.StringVar(&parsed.notes, "notes", "", "release notes (default: environment and commit)")
 	flags.BoolVar(&parsed.allowDirty, "allow-dirty", false, "allow uncommitted changes")
+	flags.BoolVar(&parsed.worktree, "worktree", false, "build in a temporary git worktree of HEAD (also: worktree = true per environment)")
 	return parsed, flags.Parse(args)
 }
 
@@ -48,6 +52,9 @@ func (d deployFlags) args(command string) []string {
 	}
 	if d.allowDirty {
 		args = append(args, "-allow-dirty")
+	}
+	if d.worktree {
+		args = append(args, "-worktree")
 	}
 	if d.notes != "" {
 		args = append(args, "-notes", d.notes)
@@ -127,6 +134,11 @@ func runDeploy(ctx context.Context, args []string) error {
 		}
 	}
 
+	restore, err := a.enterWorktree(ctx, env, parsed.worktree || env.UsesWorktree(), parsed.dryRun, parsed.allowDirty)
+	if err != nil {
+		return err
+	}
+	defer restore()
 	service, cleanup, err := a.service(result.Set, parsed.dryRun)
 	if err != nil {
 		return err
@@ -165,6 +177,17 @@ func runQA(ctx context.Context, args []string) error {
 		a.printf("Skipping iOS: simulator builds need macOS.\n")
 		platforms.IOS = false
 	}
+	var env *config.Environment
+	if parsed.env != "" {
+		if env, err = a.config.Environment(parsed.env); err != nil {
+			return err
+		}
+	}
+	restore, err := a.enterWorktree(ctx, env, parsed.worktree || env.UsesWorktree(), parsed.dryRun, true)
+	if err != nil {
+		return err
+	}
+	defer restore()
 	service, cleanup, err := a.service(credentials.NewSet(), parsed.dryRun)
 	if err != nil {
 		return err
@@ -173,6 +196,43 @@ func runQA(ctx context.Context, args []string) error {
 	outcome, err := service.QA(ctx, parsed.env, platforms.Android, platforms.IOS)
 	a.printArtifacts(outcome)
 	return err
+}
+
+// enterWorktree switches the app root to a temporary worktree of HEAD and
+// returns a function that copies the artifacts back and removes it.
+func (a *app) enterWorktree(ctx context.Context, env *config.Environment, enabled, dryRun, allowDirty bool) (func(), error) {
+	if !enabled {
+		return func() {}, nil
+	}
+	if dryRun {
+		a.printf("(the build would run in a temporary git worktree of HEAD)\n")
+		return func() {}, nil
+	}
+	if allowDirty {
+		a.printf("warning: uncommitted changes are not part of worktree builds\n")
+	}
+	var files []string
+	name := "qa"
+	if env != nil {
+		files = append(files, env.EnvFile)
+		name = env.Name
+	}
+	tree, err := worktree.Create(ctx, a.root, files)
+	if err != nil {
+		return nil, err
+	}
+	original := a.root
+	a.root = tree.Root
+	a.printf("==> Building in a temporary worktree of HEAD\n")
+	return func() {
+		a.root = original
+		if err := tree.CopyBack(original, filepath.Join(a.config.Artifacts.Directory, name)); err != nil {
+			a.printf("warning: copying artifacts back: %v\n", err)
+		}
+		if err := tree.Remove(context.Background()); err != nil {
+			a.printf("warning: removing the worktree: %v\n", err)
+		}
+	}, nil
 }
 
 // preflight lists blocking problems for a release.
