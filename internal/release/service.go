@@ -107,7 +107,7 @@ func (s Service) Deploy(ctx context.Context, req Request) (Result, error) {
 	}
 
 	s.printf("==> Preparing %s\n", s.Config.Project.Type)
-	if err := s.runPrepare(ctx, s.Config.Prepare.All, base); err != nil {
+	if err := s.prepare(ctx, base, stepAll); err != nil {
 		return result, err
 	}
 	if err := provider.Prepare(ctx, s.Runner, base); err != nil {
@@ -157,14 +157,14 @@ func (s Service) QA(ctx context.Context, envName string, android, ios bool) (Res
 		return result, err
 	}
 	base = withBuildNumber(base, "")
-	if err := s.runPrepare(ctx, s.Config.Prepare.All, base); err != nil {
+	if err := s.prepare(ctx, base, stepAll); err != nil {
 		return result, err
 	}
 	if err := provider.Prepare(ctx, s.Runner, base); err != nil {
 		return result, err
 	}
 	if android && s.Config.AndroidEnabled() {
-		if err := s.runPrepare(ctx, s.Config.Prepare.Android, base); err != nil {
+		if err := s.prepare(ctx, base, stepAndroid); err != nil {
 			return result, err
 		}
 		artifact, err := s.buildAndroid(ctx, provider, base, build.APK)
@@ -174,7 +174,7 @@ func (s Service) QA(ctx context.Context, envName string, android, ios bool) (Res
 		result.Artifacts = append(result.Artifacts, artifact)
 	}
 	if ios && s.Config.IOSEnabled() {
-		if err := s.runPrepare(ctx, s.Config.Prepare.IOS, base); err != nil {
+		if err := s.prepare(ctx, base, stepIOS); err != nil {
 			return result, err
 		}
 		s.printf("==> iOS simulator build\n")
@@ -274,7 +274,7 @@ func (s Service) deployAndroid(ctx context.Context, provider providers.Provider,
 	if number != "" && s.Config.Project.Type != config.TypeFlutter {
 		b.GradleEnv = append(b.GradleEnv, "ORG_GRADLE_PROJECT_android.injected.version.code="+number)
 	}
-	if err := s.runPrepare(ctx, s.Config.Prepare.Android, b); err != nil {
+	if err := s.prepare(ctx, b, stepAndroid); err != nil {
 		return nil, err
 	}
 	var kinds []build.Kind
@@ -364,7 +364,7 @@ func (s Service) deployIOS(ctx context.Context, provider providers.Provider, bas
 		return nil, err
 	}
 	b := withBuildNumber(base, number)
-	if err := s.runPrepare(ctx, s.Config.Prepare.IOS, b); err != nil {
+	if err := s.prepare(ctx, b, stepIOS); err != nil {
 		return nil, err
 	}
 	s.printf("==> ios: configuring the Xcode project\n")
@@ -462,6 +462,32 @@ func (s Service) publishOTA(ctx context.Context, b build.Context, env *config.En
 	)
 	s.printf("==> OTA: publish command\n")
 	return s.Runner.Run(ctx, runner.Command{Name: "sh", Args: []string{"-c", env.OTA.Command}, Env: processEnv})
+}
+
+// Prepare steps.
+const (
+	stepAll = iota
+	stepAndroid
+	stepIOS
+)
+
+// prepare runs the global [prepare] commands of a step, then the
+// environment's own.
+func (s Service) prepare(ctx context.Context, b build.Context, step int) error {
+	pick := func(p config.Prepare) []string {
+		switch step {
+		case stepAndroid:
+			return p.Android
+		case stepIOS:
+			return p.IOS
+		}
+		return p.All
+	}
+	commands := append([]string{}, pick(s.Config.Prepare)...)
+	if b.Environment != nil {
+		commands = append(commands, pick(b.Environment.Prepare)...)
+	}
+	return s.runPrepare(ctx, commands, b)
 }
 
 func (s Service) runPrepare(ctx context.Context, commands []string, b build.Context) error {

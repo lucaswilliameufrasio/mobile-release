@@ -439,3 +439,33 @@ func TestExportMethods(t *testing.T) {
 		}
 	}
 }
+
+func TestEnvironmentPrepareRunsAfterGlobalAndOnlyForItsEnvironment(t *testing.T) {
+	toml := strings.Replace(flutterToml, "[environments.staging]\n", "[prepare]\nall = [\"./global.sh\"]\n\n[environments.staging]\n", 1) + `
+[environments.staging.prepare]
+android = ["./icons.sh staging"]
+`
+	root, c := project(t, toml, flutterFiles...)
+	fake := gitFake()
+	service := Service{Root: root, Config: c, Runner: fake, Lanes: &fakeLanes{}, Credentials: secrets(t), Now: fixedNow}
+	if _, err := service.Deploy(context.Background(), Request{Environment: "staging", Android: true}); err != nil {
+		t.Fatal(err)
+	}
+	calls := strings.Join(fake.Calls, "\n")
+	global := strings.Index(calls, "sh -c ./global.sh")
+	icons := strings.Index(calls, "sh -c ./icons.sh staging")
+	apk := strings.Index(calls, "flutter build apk")
+	if global < 0 || icons < 0 || !(global < icons && icons < apk) {
+		t.Fatalf("order wrong:\n%s", calls)
+	}
+
+	fake = gitFake()
+	lanes := &fakeLanes{outputs: map[string]string{"android next_build_number": "5"}}
+	service = Service{Root: root, Config: c, Runner: fake, Lanes: lanes, Credentials: secrets(t), Now: fixedNow}
+	if _, err := service.Deploy(context.Background(), Request{Environment: "production", Android: true}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(fake.Calls, "\n"), "icons.sh") {
+		t.Fatal("staging's prepare must not run for production")
+	}
+}
