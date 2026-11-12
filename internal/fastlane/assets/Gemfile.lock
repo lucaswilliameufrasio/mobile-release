@@ -289,4 +289,4 @@ DEPENDENCIES
   fastlane-plugin-firebase_app_distribution (~> 1.0)
 
 BUNDLED WITH
-   2.6.9
+  4.0.24

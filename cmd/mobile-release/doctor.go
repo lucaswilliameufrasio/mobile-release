@@ -22,7 +22,7 @@ type tool struct {
 func requiredTools(c config.Config, platforms credentials.Platforms) []tool {
 	tools := []tool{
 		{"git", "install git"},
-		{"bundle", "Ruby >= 3.2 with Bundler, e.g. `mise use -g ruby@3.4`"},
+		{"bundle", "Ruby >= 3.2 (4.0 recommended) with Bundler, e.g. `mise use -g ruby@4.0`"},
 	}
 	switch c.Project.Type {
 	case config.TypeFlutter:
