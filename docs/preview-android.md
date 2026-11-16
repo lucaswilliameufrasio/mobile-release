@@ -17,3 +17,9 @@ O build continua sendo responsabilidade dos providers existentes. A seleção de
 flavor e perfil é a configurada pelo projeto; não se presume que todas as
 variantes existam ou estejam assinadas. Hot reload Flutter não faz parte deste
 fluxo. Uma engine hospedeira Flutter exige prova de conceito independente.
+
+Para Flutter, o preview pode escolher explicitamente `debug`, `profile` ou
+`release` sem alterar o comportamento de `qa` ou `deploy`. Para Gradle nativo,
+a tarefa e o caminho do APK permanecem configurados no projeto. Uma variante
+não contemplada pela configuração pode ser construída fora da ferramenta e
+compartilhada com `-apk`.

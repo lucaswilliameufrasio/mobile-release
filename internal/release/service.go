@@ -139,7 +139,18 @@ func (s Service) Deploy(ctx context.Context, req Request) (Result, error) {
 
 // QA builds an APK and an iOS simulator app without release signing.
 func (s Service) QA(ctx context.Context, envName string, android, ios bool) (Result, error) {
+	return s.QAWithAndroidMode(ctx, envName, android, ios, "")
+}
+
+// QAWithAndroidMode chooses a Flutter mode for a preview without changing QA defaults.
+func (s Service) QAWithAndroidMode(ctx context.Context, envName string, android, ios bool, mode string) (Result, error) {
 	var result Result
+	if mode != "" {
+		if s.Config.Project.Type != config.TypeFlutter || (mode != "debug" && mode != "profile" && mode != "release") {
+			return result, fmt.Errorf("Android mode must be debug, profile or release on a Flutter project")
+		}
+		s.Config.Android.APKOutput = "build/app/outputs/flutter-apk/app-" + mode + ".apk"
+	}
 	var env *config.Environment
 	if envName != "" {
 		found, err := s.Config.Environment(envName)
@@ -156,6 +167,7 @@ func (s Service) QA(ctx context.Context, envName string, android, ios bool) (Res
 	if err != nil {
 		return result, err
 	}
+	base.AndroidMode = mode
 	base = withBuildNumber(base, "")
 	if err := s.prepare(ctx, base, stepAll); err != nil {
 		return result, err
@@ -330,7 +342,11 @@ func (s Service) buildAndroid(ctx context.Context, provider providers.Provider, 
 	}
 	target := filepath.Join(s.Config.Artifacts.Directory, b.EnvName(), "android", name+"."+string(kind))
 	if !s.DryRun {
-		output, err := providers.ResolveOutput(s.Root, provider.AndroidOutputs(s.Config, kind))
+		patterns := provider.AndroidOutputs(s.Config, kind)
+		if b.AndroidMode != "" {
+			patterns = []string{s.Config.Android.APKOutput}
+		}
+		output, err := providers.ResolveOutput(s.Root, patterns)
 		if err != nil {
 			return Artifact{}, err
 		}

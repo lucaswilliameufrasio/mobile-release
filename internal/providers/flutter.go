@@ -21,7 +21,11 @@ func (Flutter) Android(ctx context.Context, r runner.Runner, b build.Context, ki
 	if kind == build.AAB {
 		target = "appbundle"
 	}
-	args := append([]string{"build", target, "--release"}, flutterArgs(b, true)...)
+	mode := b.AndroidMode
+	if mode == "" {
+		mode = "release"
+	}
+	args := append([]string{"build", target, "--" + mode}, flutterArgs(b, mode == "release")...)
 	return r.Run(ctx, runner.Command{Name: "flutter", Args: args, Env: b.GradleEnv})
 }
 

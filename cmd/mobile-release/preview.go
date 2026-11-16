@@ -27,6 +27,7 @@ func runPreview(ctx context.Context, args []string) error {
 	common.register(flags)
 	apk := flags.String("apk", "", "existing APK; omit to build Android QA")
 	envName := flags.String("env", "", "configured QA environment")
+	mode := flags.String("mode", "", "Flutter build mode: debug, profile or release")
 	host := flags.String("host", "", "explicit local IP reachable from the phone")
 	port := flags.Int("port", 0, "TCP port (0 chooses an available port)")
 	duration := flags.Duration("duration", 15*time.Minute, "session lifetime (maximum 1 hour)")
@@ -41,6 +42,9 @@ func runPreview(ctx context.Context, args []string) error {
 		return fmt.Errorf("-host must be an explicit local IP address")
 	}
 	path := *apk
+	if path != "" && *mode != "" {
+		return fmt.Errorf("-mode cannot be used with an existing APK")
+	}
 	if path == "" {
 		a, err := newApp(common)
 		if err != nil {
@@ -57,7 +61,7 @@ func runPreview(ctx context.Context, args []string) error {
 			return err
 		}
 		defer cleanup()
-		result, err := service.QA(ctx, *envName, true, false)
+		result, err := service.QAWithAndroidMode(ctx, *envName, true, false, *mode)
 		if err != nil {
 			return err
 		}

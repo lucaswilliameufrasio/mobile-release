@@ -68,11 +68,14 @@ On a trusted local network, bind explicitly to an IP assigned to this machine:
 
 ```bash
 mobile-release preview -host 192.168.1.10 -env local
+mobile-release preview -host 192.168.1.10 -env local -mode profile
 mobile-release preview -host 192.168.1.10 -apk path/to/app.apk
 ```
 
-The first command builds the configured Android QA artifact; the second serves
+The first command builds the configured Android QA artifact; the third serves
 an existing APK. Scan the QR on the phone to download and install it. The
+optional `-mode` selects Flutter `debug`, `profile` or `release`; native
+Gradle tasks and variants are selected in the project configuration. The
 server ends after 15 minutes by default (`-duration` accepts up to one hour),
 or on Ctrl+C. Use `-port` to choose a port. The link grants download access to
 anyone who has it, and HTTP does not protect it from network observers. Use a

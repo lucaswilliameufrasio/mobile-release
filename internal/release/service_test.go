@@ -402,6 +402,31 @@ func TestFlutterQA(t *testing.T) {
 	}
 }
 
+func TestFlutterPreviewModesRequireMatchingArtifact(t *testing.T) {
+	for _, mode := range []string{"debug", "profile", "release"} {
+		t.Run(mode, func(t *testing.T) {
+			root, c := project(t, flutterToml,
+				"build/app/outputs/flutter-apk/app-"+mode+".apk")
+			fake := gitFake()
+			service := Service{Root: root, Config: c, Runner: fake}
+			if _, err := service.QAWithAndroidMode(context.Background(), "", true, false, mode); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(strings.Join(fake.Calls, "\n"), "flutter build apk --"+mode) {
+				t.Fatalf("wrong build mode: %v", fake.Calls)
+			}
+		})
+	}
+	root, c := project(t, flutterToml, "build/app/outputs/flutter-apk/app-release.apk")
+	service := Service{Root: root, Config: c, Runner: gitFake()}
+	if _, err := service.QAWithAndroidMode(context.Background(), "", true, false, "profile"); err == nil {
+		t.Fatal("profile build must not reuse a stale release artifact")
+	}
+	if _, err := service.QAWithAndroidMode(context.Background(), "", true, false, "invalid"); err == nil {
+		t.Fatal("invalid mode was accepted")
+	}
+}
+
 func TestDryRunNeedsNoArtifactsOrStore(t *testing.T) {
 	root, c := project(t, flutterToml, ".env", ".env.prd")
 	lanes := &fakeLanes{}

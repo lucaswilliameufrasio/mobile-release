@@ -40,6 +40,8 @@ type Context struct {
 	GradleEnv []string
 	// Release is false for QA builds, which skip release signing.
 	Release bool
+	// AndroidMode is an optional Flutter preview build mode.
+	AndroidMode string
 }
 
 // EnvName returns the environment name or "qa".
