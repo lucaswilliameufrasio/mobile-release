@@ -62,6 +62,24 @@ prints. New major versions change the module path, so they are announced but
 never applied automatically.
 `mobile-release qa` builds an APK and a simulator app without release signing.
 
+### Android preview by QR
+
+On a trusted local network, bind explicitly to an IP assigned to this machine:
+
+```bash
+mobile-release preview -host 192.168.1.10 -env local
+mobile-release preview -host 192.168.1.10 -apk path/to/app.apk
+```
+
+The first command builds the configured Android QA artifact; the second serves
+an existing APK. Scan the QR on the phone to download and install it. The
+server ends after 15 minutes by default (`-duration` accepts up to one hour),
+or on Ctrl+C. Use `-port` to choose a port. The link grants download access to
+anyone who has it, and HTTP does not protect it from network observers. Use a
+trusted network, do not serve APKs containing credentials, and ensure the
+phone can reach the chosen IP and port. The APK must be signed compatibly with
+any installed copy. This is not Flutter hot reload or a silent update.
+
 ## release.toml
 
 ```toml

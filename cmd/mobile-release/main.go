@@ -43,6 +43,7 @@ Usage:
   mobile-release doctor    check tools, configuration and credentials
   mobile-release deploy    build and publish an environment
   mobile-release qa        build an APK and an iOS simulator app
+  mobile-release preview   serve a local Android APK with a QR code
   mobile-release mcp       serve the tools to agents over MCP (stdio)
   mobile-release version
 
@@ -94,6 +95,8 @@ func run(ctx context.Context, args []string) error {
 		return runDeploy(ctx, rest)
 	case "qa":
 		return runQA(ctx, rest)
+	case "preview":
+		return runPreview(ctx, rest)
 	case "mcp":
 		return (&mcpserver.Server{Version: version}).Run(ctx)
 	case "version", "-version", "--version":
