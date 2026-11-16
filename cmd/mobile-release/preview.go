@@ -16,9 +16,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/credentials"
 	"github.com/skip2/go-qrcode"
+	"golang.org/x/text/unicode/norm"
 )
 
 func runPreview(ctx context.Context, args []string) error {
@@ -42,6 +44,7 @@ func runPreview(ctx context.Context, args []string) error {
 		return fmt.Errorf("-host must be an explicit local IP address")
 	}
 	path := *apk
+	name := ""
 	if path != "" && *mode != "" {
 		return fmt.Errorf("-mode cannot be used with an existing APK")
 	}
@@ -69,6 +72,7 @@ func runPreview(ctx context.Context, args []string) error {
 			return fmt.Errorf("expected one Android APK from QA")
 		}
 		path = filepath.Join(a.root, result.Artifacts[0].Path)
+		name = a.config.App.Name
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -82,6 +86,10 @@ func runPreview(ctx context.Context, args []string) error {
 	if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(info.Name()), ".apk") {
 		return fmt.Errorf("selected artifact must be a regular APK file")
 	}
+	if name == "" {
+		name = strings.TrimSuffix(info.Name(), filepath.Ext(info.Name()))
+	}
+	filename := previewFilename(name, info.ModTime())
 	listener, err := net.Listen("tcp", net.JoinHostPort(ip.String(), strconv.Itoa(*port)))
 	if err != nil {
 		return err
@@ -91,16 +99,16 @@ func runPreview(ctx context.Context, args []string) error {
 	if _, err := rand.Read(token); err != nil {
 		return err
 	}
-	route := "/" + hex.EncodeToString(token) + "/app.apk"
+	route := "/" + hex.EncodeToString(token) + "/" + filename
 	address := listener.Addr().(*net.TCPAddr)
 	link := (&url.URL{Scheme: "http", Host: net.JoinHostPort(ip.String(), strconv.Itoa(address.Port)), Path: route}).String()
 	qr, err := qrcode.New(link, qrcode.Medium)
 	if err != nil {
 		return err
 	}
-	handler := previewHandler(file, info, route)
+	handler := previewHandler(file, info, route, filename)
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
-	fmt.Printf("Only use a trusted network; anyone with this link can download the APK.\n%s\n%s\nExpires in %s. Press Ctrl+C to stop.\n", qr.ToSmallString(false), link, *duration)
+	fmt.Printf("APK: %s\nOnly use a trusted network; anyone with this link can download the APK.\n%s\n%s\nExpires in %s. Press Ctrl+C to stop.\n", filename, qr.ToSmallString(false), link, *duration)
 	session, cancel := context.WithTimeout(ctx, *duration)
 	defer cancel()
 	go func() {
@@ -114,15 +122,42 @@ func runPreview(ctx context.Context, args []string) error {
 	return err
 }
 
-func previewHandler(file *os.File, info os.FileInfo, route string) http.Handler {
+// previewFilename is safe for URLs, filesystem names and HTTP headers.
+func previewFilename(name string, builtAt time.Time) string {
+	var slug strings.Builder
+	pendingDash := false
+	for _, r := range norm.NFKD.String(strings.ToLower(name)) {
+		if unicode.Is(unicode.Mn, r) {
+			continue
+		}
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if pendingDash && slug.Len() > 0 && slug.Len() < 63 {
+				slug.WriteByte('-')
+			}
+			pendingDash = false
+			if slug.Len() < 64 {
+				slug.WriteRune(r)
+			}
+		} else {
+			pendingDash = true
+		}
+	}
+	value := strings.Trim(slug.String(), "-")
+	if value == "" {
+		value = "app"
+	}
+	return value + "-" + builtAt.UTC().Format("20060102-150405") + "-utc.apk"
+}
+
+func previewHandler(file *os.File, info os.FileInfo, route, filename string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != route || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/vnd.android.package-archive")
-		w.Header().Set("Content-Disposition", `attachment; filename="app.apk"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 		w.Header().Set("Cache-Control", "no-store")
-		http.ServeContent(w, r, "app.apk", info.ModTime(), io.NewSectionReader(file, 0, info.Size()))
+		http.ServeContent(w, r, filename, info.ModTime(), io.NewSectionReader(file, 0, info.Size()))
 	})
 }

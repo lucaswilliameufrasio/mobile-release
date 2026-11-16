@@ -26,7 +26,7 @@ func TestPreviewHandlerServesOnlySelectedAPK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(previewHandler(file, info, "/secret/app.apk"))
+	server := httptest.NewServer(previewHandler(file, info, "/secret/app.apk", "tixnow-bar-20261116-120000-utc.apk"))
 	defer server.Close()
 	for _, tc := range []struct {
 		method string
@@ -54,6 +54,26 @@ func TestPreviewHandlerServesOnlySelectedAPK(t *testing.T) {
 		}
 		if resp.StatusCode != tc.status || (tc.status == http.StatusOK && string(body) != tc.body) {
 			t.Fatalf("%s %s: status %d, body %q", tc.method, tc.path, resp.StatusCode, body)
+		}
+		if tc.status == http.StatusOK && resp.Header.Get("Content-Disposition") != `attachment; filename="tixnow-bar-20261116-120000-utc.apk"` {
+			t.Fatalf("unexpected download name: %q", resp.Header.Get("Content-Disposition"))
+		}
+	}
+}
+
+func TestPreviewFilename(t *testing.T) {
+	built := time.Date(2026, 11, 16, 9, 30, 45, 0, time.FixedZone("test", -3*60*60))
+	for _, tc := range []struct {
+		name string
+		want string
+	}{
+		{"TixNow Bar", "tixnow-bar-20261116-123045-utc.apk"},
+		{"Café & Bar", "cafe-bar-20261116-123045-utc.apk"},
+		{"../\"evil\r\nX: yes", "evil-x-yes-20261116-123045-utc.apk"},
+		{"🍹", "app-20261116-123045-utc.apk"},
+	} {
+		if got := previewFilename(tc.name, built); got != tc.want {
+			t.Errorf("previewFilename(%q) = %q, want %q", tc.name, got, tc.want)
 		}
 	}
 }

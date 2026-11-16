@@ -82,6 +82,9 @@ anyone who has it, and HTTP does not protect it from network observers. Use a
 trusted network, do not serve APKs containing credentials, and ensure the
 phone can reach the chosen IP and port. The APK must be signed compatibly with
 any installed copy. This is not Flutter hot reload or a silent update.
+The downloaded filename combines the app name and the APK's build timestamp
+in UTC, for example `tixnow-bar-20261116-123045-utc.apk`. Existing local
+artifacts and the app's installed name are not renamed.
 
 ## release.toml
 

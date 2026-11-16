@@ -23,3 +23,9 @@ Para Flutter, o preview pode escolher explicitamente `debug`, `profile` ou
 a tarefa e o caminho do APK permanecem configurados no projeto. Uma variante
 não contemplada pela configuração pode ser construída fora da ferramenta e
 compartilhada com `-apk`.
+
+O nome sugerido ao navegador usa o nome do aplicativo em slug e a data e hora
+UTC de modificação do APK (`nome-YYYYMMDD-HHMMSS-utc.apk`). Em `-apk`, usa-se
+o nome do arquivo original como base; isso não modifica o APK nem o nome
+interno do aplicativo. O nome e horário de artefatos de deploy continuam
+inalterados.
