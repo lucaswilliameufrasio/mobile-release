@@ -86,6 +86,42 @@ The downloaded filename combines the app name and the APK's build timestamp
 in UTC, for example `tixnow-bar-20261116-123045-utc.apk`. Existing local
 artifacts and the app's installed name are not renamed.
 
+### iOS App IDs, capabilities and profiles
+
+`mobile-release profiles plan` compares the App IDs, capabilities and
+provisioning profiles declared in `release.toml` with App Store Connect
+(read-only); `mobile-release profiles apply` registers missing App IDs,
+enables capabilities and recreates the affected profiles after asking
+(`-yes` in CI, `-dry-run` to only print the steps). It runs on the current
+project, on directories given as arguments, or on every app listed in a file:
+
+```toml
+[ios.capabilities]
+associated_domains = ["applinks:go.tixnow.com.br"]
+push_notifications = true
+
+[[ios.extensions]]
+bundle_id = "br.com.tixnow.app.clip"
+
+[environments.staging]
+ios_profiles = ["development", "ad-hoc"]   # default: from the destinations
+```
+
+```bash
+mobile-release profiles plan  -apps ~/apps/mobile-apps.txt   # one project dir per line
+mobile-release profiles apply -apps ~/apps/mobile-apps.txt
+```
+
+Profiles are regenerated the way `deploy` signs: through the API for manual
+signing (written to `dist/profiles/` and installed for Xcode on macOS), with
+fastlane match for match signing, and left to Xcode for automatic signing.
+New profiles are created before old ones are deleted when App Store Connect
+allows it (otherwise the old one is backed up first and a failure names
+exactly what was deleted), names are kept, and `doctor` warns about profiles
+expiring within 30 days. See
+[docs/ios-profiles.md](docs/ios-profiles.md) for the schema, the TixNow
+example, CI usage and limitations.
+
 ## release.toml
 
 ```toml
