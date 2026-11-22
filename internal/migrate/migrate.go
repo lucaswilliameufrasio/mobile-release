@@ -114,6 +114,9 @@ func sameEffective(before, after []byte) error {
 
 var (
 	tableHeader = regexp.MustCompile(`^\s*\[([^\[\]]+)\]\s*(#.*)?$`)
+	// arrayHeader is an array of tables such as [[ios.extensions]]: its keys
+	// have no defaults and must not be read as keys of the previous table.
+	arrayHeader = regexp.MustCompile(`^\s*\[\[([^\[\]]+)\]\]\s*(#.*)?$`)
 	keyValue    = regexp.MustCompile(`^\s*([A-Za-z0-9_.\-"']+)\s*=\s*(.+?)\s*$`)
 )
 
@@ -197,6 +200,10 @@ func removeDefaults(data []byte) ([]byte, []Finding, error) {
 			table = unquote(match[1])
 			continue
 		}
+		if match := arrayHeader.FindStringSubmatch(line); match != nil {
+			table = unquote(match[1]) + "[]"
+			continue
+		}
 		match := keyValue.FindStringSubmatch(line)
 		if match == nil || strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
@@ -246,7 +253,7 @@ func dropEmptyTables(lines []string, keep []bool) {
 		}
 		hadRemoved, hasContent := false, false
 		for j := i + 1; j < len(lines); j++ {
-			if tableHeader.FindStringSubmatch(lines[j]) != nil {
+			if tableHeader.FindStringSubmatch(lines[j]) != nil || arrayHeader.FindStringSubmatch(lines[j]) != nil {
 				break
 			}
 			trimmed := strings.TrimSpace(lines[j])
