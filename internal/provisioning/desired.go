@@ -168,8 +168,8 @@ func needsDevices(kind string) bool {
 	return kind == config.ProfileDevelopment || kind == config.ProfileAdHoc
 }
 
-// matchType is the fastlane match type of a kind.
-func matchType(kind string) string {
+// MatchType is the fastlane match type of a kind.
+func MatchType(kind string) string {
 	switch kind {
 	case config.ProfileDevelopment:
 		return "development"

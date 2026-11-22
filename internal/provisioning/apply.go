@@ -286,17 +286,17 @@ func (a Applier) runMatch(ctx context.Context, plan Plan, kinds map[string]bool,
 		if !kinds[kind] {
 			continue
 		}
-		a.printf("  ~ fastlane match %s --force for %s\n", matchType(kind), strings.Join(bundleIDs, ", "))
+		a.printf("  ~ fastlane match %s --force for %s\n", MatchType(kind), strings.Join(bundleIDs, ", "))
 		if a.Match == nil && a.DryRun {
 			result.Recreated++
 			continue
 		}
 		if a.Match == nil {
-			result.Failures = append(result.Failures, Failure{Target: plan.Desired.Name, Step: "match " + matchType(kind), Err: errors.New("fastlane match is not available here")})
+			result.Failures = append(result.Failures, Failure{Target: plan.Desired.Name, Step: "match " + MatchType(kind), Err: errors.New("fastlane match is not available here")})
 			continue
 		}
 		if err := a.Match(ctx, kind, bundleIDs); err != nil {
-			result.Failures = append(result.Failures, Failure{Target: plan.Desired.Name, Step: "match " + matchType(kind), Err: err})
+			result.Failures = append(result.Failures, Failure{Target: plan.Desired.Name, Step: "match " + MatchType(kind), Err: err})
 			continue
 		}
 		result.Recreated++

@@ -42,6 +42,7 @@ Usage:
   mobile-release setup     ask for missing credentials and store them
   mobile-release doctor    check tools, configuration and credentials
   mobile-release deploy    build and publish an environment
+  mobile-release profiles  plan|apply: sync iOS App IDs, capabilities and provisioning profiles
   mobile-release qa        build an APK and an iOS simulator app
   mobile-release preview   serve a local Android APK with a QR code
   mobile-release mcp       serve the tools to agents over MCP (stdio)
@@ -49,6 +50,7 @@ Usage:
 
 Common flags: -dir <project> -config <release.toml> -yes (never prompt)
 deploy/qa:    -env <name> -platform all|android|ios -dry-run -notes <text>
+profiles:     plan|apply [project dirs...] -apps <file> -env <name> -dry-run -check
 
 Run "mobile-release <command> -h" for every flag.
 `
@@ -97,6 +99,8 @@ func run(ctx context.Context, args []string) error {
 		return runQA(ctx, rest)
 	case "preview":
 		return runPreview(ctx, rest)
+	case "profiles":
+		return runProfiles(ctx, rest)
 	case "mcp":
 		return (&mcpserver.Server{Version: version}).Run(ctx)
 	case "version", "-version", "--version":
