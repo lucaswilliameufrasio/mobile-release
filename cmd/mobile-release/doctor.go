@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/config"
 	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/credentials"
+	"github.com/lucaswilliameufrasio/mobile-release/v2/internal/provisioning"
 )
 
 type tool struct {
@@ -144,6 +146,9 @@ func runDoctor(ctx context.Context, args []string) error {
 			ok = false
 		}
 	}
+	if !a.checkProfiles(ctx, *envName) {
+		ok = false
+	}
 	if !ok {
 		a.printf("\nSome checks failed. `mobile-release setup` asks for missing credentials.\n")
 		return fmt.Errorf("doctor found problems")
@@ -157,4 +162,74 @@ func presetSuffix(c config.Config) string {
 		return ""
 	}
 	return ", preset " + c.Project.Preset
+}
+
+// checkProfiles reports App IDs and provisioning profiles that need work:
+// expiring within provisioning.RenewWithinDays (warning), and invalid,
+// expired or missing profiles (failure, unless Xcode manages them). It
+// never fails on network problems or when no API key is configured.
+func (a *app) checkProfiles(ctx context.Context, envName string) bool {
+	if !a.config.IOSEnabled() || a.config.IOS.BundleID == "" {
+		return true
+	}
+	a.printf("\nProvisioning profiles (App Store Connect)\n")
+	set, err := a.resolveAppStoreKey(ctx, envName, false)
+	if err != nil {
+		a.printf("  · skipped: no App Store Connect API key (`mobile-release setup` asks for it)\n")
+		return true
+	}
+	client, err := a.provisioningClient(set, map[string]provisioning.API{})
+	if err != nil {
+		a.printf("  ! %v\n", err)
+		return true
+	}
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	plan, err := provisioning.Planner{API: client, Now: profilesNow}.Plan(ctx, provisioning.FromConfig(a.root, a.config, envName))
+	if err != nil {
+		a.printf("  ! could not check App Store Connect: %v\n", err)
+		return true
+	}
+	ok := true
+	for _, warning := range plan.Warnings {
+		a.printf("  ! %s\n", warning)
+	}
+	for _, target := range plan.Targets {
+		if target.Bundle == nil {
+			a.printf("  ✗ %s: App ID not registered\n", target.Target.BundleID)
+			ok = false
+		}
+		for _, capability := range target.Enable {
+			a.printf("  ! %s: %s is not enabled\n", target.Target.BundleID, capability.Label)
+		}
+		for _, profile := range target.Profiles {
+			line := fmt.Sprintf("%s %s", target.Target.BundleID, profile.Kind)
+			switch {
+			case profile.Action == provisioning.Keep:
+				a.printf("  ✓ %s expires in %d days\n", line, profile.ExpiresIn)
+			case onlyExpiring(profile) || profile.Action == provisioning.Xcode:
+				a.printf("  ! %s: %s\n", line, strings.Join(profile.Reasons, "; "))
+			default:
+				a.printf("  ✗ %s: %s\n", line, strings.Join(profile.Reasons, "; "))
+				ok = false
+			}
+		}
+	}
+	if plan.Changes() > 0 {
+		a.printf("  → `mobile-release profiles plan` shows the details; `mobile-release profiles apply` fixes them\n")
+	}
+	return ok
+}
+
+// onlyExpiring is a profile that still works but expires soon.
+func onlyExpiring(profile provisioning.ProfilePlan) bool {
+	if profile.Current == nil || len(profile.Reasons) == 0 {
+		return false
+	}
+	for _, reason := range profile.Reasons {
+		if !strings.HasPrefix(reason, "expires in ") {
+			return false
+		}
+	}
+	return true
 }

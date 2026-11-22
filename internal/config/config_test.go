@@ -245,3 +245,131 @@ func TestExamplesAreValid(t *testing.T) {
 		}
 	}
 }
+
+const tixnowProvisioning = `
+schema_version = 2
+
+[project]
+type = "flutter"
+
+[app]
+name = "TixNow"
+
+[android]
+package_name = "br.com.tixnow.app"
+
+[ios]
+bundle_id = "br.com.tixnow.app"
+team_id = "ABCDE12345"
+signing = "manual"
+
+[ios.capabilities]
+associated_domains = ["applinks:go.tixnow.com.br"]
+push_notifications = true
+sign_in_with_apple = true
+app_groups = ["group.br.com.tixnow"]
+other = ["NFC_TAG_READING"]
+
+[[ios.extensions]]
+bundle_id = "br.com.tixnow.app.notifications"
+name = "TixNow Notifications"
+capabilities = { app_groups = ["group.br.com.tixnow"] }
+
+[[ios.extensions]]
+bundle_id = "br.com.tixnow.app.clip"
+
+[ios.provisioning]
+directory = "ios/profiles"
+
+[environments.staging]
+destinations = ["firebase"]
+ios_profiles = ["development", "ad-hoc"]
+
+[environments.staging.firebase]
+android_app_id = "1:1:android:a"
+ios_app_id = "1:1:ios:b"
+
+[environments.production]
+destinations = ["play", "testflight"]
+`
+
+func TestParseProvisioning(t *testing.T) {
+	c := mustParse(t, tixnowProvisioning)
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.IOS.Capabilities.AssociatedDomains; len(got) != 1 || got[0] != "applinks:go.tixnow.com.br" {
+		t.Fatalf("associated domains = %v", got)
+	}
+	if len(c.IOS.Extensions) != 2 || c.IOS.Extensions[0].Capabilities.AppGroups[0] != "group.br.com.tixnow" {
+		t.Fatalf("extensions = %+v", c.IOS.Extensions)
+	}
+	if c.ProvisioningStrategy() != ProvisioningAPI || c.ProfilesDirectory() != "ios/profiles" || !c.InstallProfiles() {
+		t.Fatalf("provisioning = %s %s %v", c.ProvisioningStrategy(), c.ProfilesDirectory(), c.InstallProfiles())
+	}
+	if got := strings.Join(c.ProfileTypes(""), ","); got != "development,ad-hoc,app-store" {
+		t.Fatalf("profile types = %s", got)
+	}
+	if got := strings.Join(c.ProfileTypes("production"), ","); got != "app-store" {
+		t.Fatalf("production profile types (derived) = %s", got)
+	}
+}
+
+func TestProvisioningIsBackwardCompatible(t *testing.T) {
+	// A file written before ios.capabilities existed keeps parsing, declares
+	// nothing to enable and derives profiles from its destinations.
+	c := mustParse(t, flutterV2)
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if !c.IOS.Capabilities.Empty() || len(c.IOS.Extensions) != 0 {
+		t.Fatalf("unexpected provisioning state: %+v", c.IOS)
+	}
+	if c.ProvisioningStrategy() != ProvisioningMatch || c.ProfilesDirectory() != filepath.Join("dist", "profiles") {
+		t.Fatalf("defaults = %s %s", c.ProvisioningStrategy(), c.ProfilesDirectory())
+	}
+	if got := strings.Join(c.ProfileTypes(""), ","); got != "ad-hoc,app-store" {
+		t.Fatalf("derived profile types = %s", got)
+	}
+	automatic := mustParse(t, strings.Replace(flutterV2, `signing = "match"`, `signing = "automatic"`, 1))
+	if automatic.ProvisioningStrategy() != ProvisioningNone {
+		t.Fatalf("automatic signing strategy = %s", automatic.ProvisioningStrategy())
+	}
+	// Marshalling an old config adds no new keys.
+	data, err := Marshal(mustParse(t, flutterV2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unwanted := range []string{"capabilities", "extensions", "provisioning", "ios_profiles"} {
+		if strings.Contains(string(data), unwanted) {
+			t.Errorf("marshal added %q:\n%s", unwanted, data)
+		}
+	}
+}
+
+func TestProvisioningValidation(t *testing.T) {
+	bad := strings.NewReplacer(
+		`"applinks:go.tixnow.com.br"`, `"go.tixnow.com.br"`,
+		`app_groups = ["group.br.com.tixnow"]`+"\n", `app_groups = ["br.com.tixnow"]`+"\n",
+		`"NFC_TAG_READING"`, `"NFC"`,
+		`bundle_id = "br.com.tixnow.app.clip"`, `bundle_id = "br.com.tixnow.app.notifications"`,
+		`ios_profiles = ["development", "ad-hoc"]`, `ios_profiles = ["enterprise"]`,
+		`directory = "ios/profiles"`, `strategy = "sigh"`,
+	).Replace(tixnowProvisioning)
+	c := mustParse(t, bad)
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("expected problems")
+	}
+	for _, want := range []string{
+		"associated_domains", `"br.com.tixnow" must start with "group."`, `unknown App Store Connect capability "NFC"`,
+		"declared twice", "ios_profiles values", "ios.provisioning.strategy",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in:\n%v", want, err)
+		}
+	}
+	if _, err := Parse([]byte(strings.Replace(tixnowProvisioning, "push_notifications", "push", 1))); err == nil || !strings.Contains(err.Error(), "unknown keys") {
+		t.Fatalf("typos in capabilities must be rejected, got %v", err)
+	}
+}

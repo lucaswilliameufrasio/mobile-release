@@ -110,6 +110,81 @@ type IOS struct {
 	Signing         string `toml:"signing,omitempty"`
 	SimulatorOutput string `toml:"simulator_output,omitempty"`
 	XcodeGenSpec    string `toml:"xcodegen_spec,omitempty"`
+	// Capabilities the App ID of bundle_id must have (`mobile-release profiles`).
+	Capabilities Capabilities `toml:"capabilities,omitempty"`
+	// Extensions lists the other bundle ids shipped in the app (app
+	// extensions, App Clip, watch app) whose App IDs and profiles are managed
+	// together with the app.
+	Extensions   []IOSExtension `toml:"extensions,omitempty"`
+	Provisioning Provisioning   `toml:"provisioning,omitempty"`
+}
+
+// Capabilities declares App ID capabilities. Only enabling is managed:
+// capabilities enabled in the portal but not listed here are left alone.
+type Capabilities struct {
+	// AssociatedDomains enables ASSOCIATED_DOMAINS. The domains themselves
+	// (e.g. "applinks:go.example.com") live in the app's entitlements file;
+	// they are listed here so the desired state is documented in one place.
+	AssociatedDomains []string `toml:"associated_domains,omitempty"`
+	// AppGroups enables APP_GROUPS. The App Store Connect API cannot assign
+	// group ids to an App ID: that step is reported, not applied.
+	AppGroups         []string `toml:"app_groups,omitempty"`
+	PushNotifications bool     `toml:"push_notifications,omitempty"`
+	SignInWithApple   bool     `toml:"sign_in_with_apple,omitempty"`
+	// Other lists raw App Store Connect capability types (e.g. "NFC_TAG_READING").
+	Other []string `toml:"other,omitempty"`
+}
+
+// Empty reports whether no capability is declared.
+func (c Capabilities) Empty() bool {
+	return len(c.AssociatedDomains) == 0 && len(c.AppGroups) == 0 && !c.PushNotifications && !c.SignInWithApple && len(c.Other) == 0
+}
+
+// IOSExtension is a bundle id shipped inside the app.
+type IOSExtension struct {
+	BundleID string `toml:"bundle_id"`
+	// Name used when registering the App ID (default: derived from the id).
+	Name         string       `toml:"name,omitempty"`
+	Capabilities Capabilities `toml:"capabilities,omitempty"`
+}
+
+// Provisioning configures `mobile-release profiles`.
+type Provisioning struct {
+	// Strategy regenerates profiles through the App Store Connect API
+	// ("api"), fastlane match ("match") or leaves them to Xcode ("none").
+	// Default: match for signing = "match", api for "manual", none for
+	// "automatic".
+	Strategy string `toml:"strategy,omitempty"`
+	// Directory receives the downloaded profiles (default "dist/profiles").
+	Directory string `toml:"directory,omitempty"`
+	// Install copies profiles into the macOS provisioning profiles folders
+	// (default true; ignored on other systems).
+	Install *bool `toml:"install,omitempty"`
+}
+
+// Provisioning strategies.
+const (
+	ProvisioningAPI   = "api"
+	ProvisioningMatch = "match"
+	ProvisioningNone  = "none"
+)
+
+// Provisioning profile types, named after the IPA export methods.
+const (
+	ProfileDevelopment = "development"
+	ProfileAdHoc       = "ad-hoc"
+	ProfileAppStore    = "app-store"
+)
+
+// KnownCapabilityTypes are the App Store Connect CapabilityType values
+// accepted in ios.capabilities.other.
+var KnownCapabilityTypes = []string{
+	"ACCESS_WIFI_INFORMATION", "APPLE_ID_AUTH", "APPLE_PAY", "APP_GROUPS", "ASSOCIATED_DOMAINS",
+	"AUTOFILL_CREDENTIAL_PROVIDER", "CLASSKIT", "COREMEDIA_HLS_LOW_LATENCY", "DATA_PROTECTION",
+	"GAME_CENTER", "HEALTHKIT", "HOMEKIT", "HOT_SPOT", "ICLOUD", "INTER_APP_AUDIO", "IN_APP_PURCHASE",
+	"MAPS", "MULTIPATH", "NETWORK_CUSTOM_PROTOCOL", "NETWORK_EXTENSIONS", "NFC_TAG_READING",
+	"PERSONAL_VPN", "PUSH_NOTIFICATIONS", "SIRIKIT", "SYSTEM_EXTENSION_INSTALL", "USER_MANAGEMENT",
+	"WALLET", "WIRELESS_ACCESSORY_CONFIGURATION",
 }
 
 type Flutter struct {
@@ -142,6 +217,11 @@ type Environment struct {
 	// Worktree builds in a temporary git worktree of HEAD, so prepare
 	// commands never change the developer's checkout.
 	Worktree *bool `toml:"worktree,omitempty"`
+	// IOSProfiles lists the provisioning profile types this environment
+	// needs (development, ad-hoc, app-store). Default: derived from the
+	// destinations (firebase → ad-hoc; testflight, app-store, artifacts →
+	// app-store).
+	IOSProfiles []string `toml:"ios_profiles,omitempty"`
 }
 
 type Firebase struct {
@@ -434,6 +514,7 @@ func (c Config) Validate() error {
 	if c.IOS.Workspace != "" && c.IOS.Project != "" {
 		add("set only one of ios.workspace and ios.project")
 	}
+	problems = append(problems, c.provisioningProblems()...)
 	if !c.AndroidEnabled() && !c.IOSEnabled() {
 		add("android and ios are both disabled")
 	}
@@ -464,6 +545,13 @@ func (c Config) Validate() error {
 		}
 		for _, destination := range env.Destinations {
 			problems = append(problems, c.destinationProblems(env, destination)...)
+		}
+		for _, profile := range env.IOSProfiles {
+			switch profile {
+			case ProfileDevelopment, ProfileAdHoc, ProfileAppStore:
+			default:
+				add("environment %q: ios_profiles values must be development, ad-hoc or app-store (got %q)", name, profile)
+			}
 		}
 	}
 	if len(problems) > 0 {
@@ -517,6 +605,154 @@ func (c Config) destinationProblems(env *Environment, destination string) []stri
 		}
 	}
 	return problems
+}
+
+var (
+	bundleIDPattern       = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+	associatedDomainKinds = []string{"applinks:", "webcredentials:", "appclips:", "activitycontinuation:"}
+)
+
+func (c Config) provisioningProblems() []string {
+	var problems []string
+	add := func(format string, args ...any) {
+		problems = append(problems, fmt.Sprintf(format, args...))
+	}
+	switch c.IOS.Provisioning.Strategy {
+	case "", ProvisioningAPI, ProvisioningMatch, ProvisioningNone:
+	default:
+		add("ios.provisioning.strategy must be api, match or none")
+	}
+	if dir := c.IOS.Provisioning.Directory; dir != "" && filepath.IsAbs(dir) {
+		add("ios.provisioning.directory must be a relative path")
+	}
+	declared := !c.IOS.Capabilities.Empty() || len(c.IOS.Extensions) > 0
+	if declared && c.IOS.BundleID == "" {
+		add("ios.capabilities and ios.extensions need ios.bundle_id")
+	}
+	if c.IOS.BundleID != "" && !bundleIDPattern.MatchString(c.IOS.BundleID) {
+		add("ios.bundle_id %q: use letters, digits, dots and dashes", c.IOS.BundleID)
+	}
+	problems = append(problems, capabilityProblems("ios.capabilities", c.IOS.Capabilities)...)
+	seen := map[string]bool{c.IOS.BundleID: true}
+	for index, extension := range c.IOS.Extensions {
+		prefix := fmt.Sprintf("ios.extensions[%d]", index)
+		switch {
+		case extension.BundleID == "":
+			add("%s: set bundle_id", prefix)
+		case !bundleIDPattern.MatchString(extension.BundleID):
+			add("%s: bundle_id %q: use letters, digits, dots and dashes", prefix, extension.BundleID)
+		case seen[extension.BundleID]:
+			add("%s: bundle_id %q is declared twice", prefix, extension.BundleID)
+		}
+		seen[extension.BundleID] = true
+		problems = append(problems, capabilityProblems(prefix+".capabilities", extension.Capabilities)...)
+	}
+	return problems
+}
+
+func capabilityProblems(prefix string, capabilities Capabilities) []string {
+	var problems []string
+	for _, domain := range capabilities.AssociatedDomains {
+		known := false
+		for _, kind := range associatedDomainKinds {
+			if strings.HasPrefix(domain, kind) && len(domain) > len(kind) {
+				known = true
+			}
+		}
+		if !known {
+			problems = append(problems, fmt.Sprintf("%s.associated_domains: %q must look like applinks:<domain> (or webcredentials:, appclips:, activitycontinuation:)", prefix, domain))
+		}
+	}
+	for _, group := range capabilities.AppGroups {
+		if !strings.HasPrefix(group, "group.") || len(group) <= len("group.") {
+			problems = append(problems, fmt.Sprintf("%s.app_groups: %q must start with \"group.\"", prefix, group))
+		}
+	}
+	for _, other := range capabilities.Other {
+		if !sliceContains(KnownCapabilityTypes, other) {
+			problems = append(problems, fmt.Sprintf("%s.other: unknown App Store Connect capability %q", prefix, other))
+		}
+	}
+	return problems
+}
+
+func sliceContains(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+// ProvisioningStrategy returns ios.provisioning.strategy or its default for
+// the signing strategy.
+func (c Config) ProvisioningStrategy() string {
+	if c.IOS.Provisioning.Strategy != "" {
+		return c.IOS.Provisioning.Strategy
+	}
+	switch c.IOS.Signing {
+	case SigningMatch:
+		return ProvisioningMatch
+	case SigningManual:
+		return ProvisioningAPI
+	}
+	return ProvisioningNone
+}
+
+// ProfilesDirectory is where downloaded profiles are written, relative to
+// the project root.
+func (c Config) ProfilesDirectory() string {
+	if c.IOS.Provisioning.Directory != "" {
+		return c.IOS.Provisioning.Directory
+	}
+	return filepath.Join(firstNonEmpty(c.Artifacts.Directory, "dist"), "profiles")
+}
+
+// InstallProfiles reports whether profiles are copied into the macOS
+// provisioning profiles folders.
+func (c Config) InstallProfiles() bool {
+	if c.IOS.Provisioning.Install != nil {
+		return *c.IOS.Provisioning.Install
+	}
+	return true
+}
+
+// ProfileTypes returns the profile types an environment needs: ios_profiles
+// when set, otherwise the ones its destinations export.
+func (e *Environment) ProfileTypes() []string {
+	if len(e.IOSProfiles) > 0 {
+		return e.IOSProfiles
+	}
+	var types []string
+	if e.Has(DestinationFirebase) {
+		types = append(types, ProfileAdHoc)
+	}
+	if e.Has(DestinationTestFlight) || e.Has(DestinationAppStore) || (e.Has(DestinationArtifacts) && len(types) == 0) {
+		types = append(types, ProfileAppStore)
+	}
+	return types
+}
+
+// ProfileTypes is the union of every environment's profile types (or only
+// envName's), in development, ad-hoc, app-store order.
+func (c Config) ProfileTypes(envName string) []string {
+	wanted := map[string]bool{}
+	for _, name := range c.EnvironmentNames() {
+		if envName != "" && name != envName {
+			continue
+		}
+		for _, kind := range c.Environments[name].ProfileTypes() {
+			wanted[kind] = true
+		}
+	}
+	var types []string
+	for _, kind := range []string{ProfileDevelopment, ProfileAdHoc, ProfileAppStore} {
+		if wanted[kind] {
+			types = append(types, kind)
+		}
+	}
+	return types
 }
 
 // ValidationError lists every configuration problem.

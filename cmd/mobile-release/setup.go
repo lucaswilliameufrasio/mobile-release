@@ -68,6 +68,9 @@ func runSetup(ctx context.Context, args []string) error {
 			return err
 		}
 	}
+	if err := a.setupProfilesKey(ctx); err != nil {
+		return err
+	}
 	a.printf("\nDone. Check everything with `mobile-release doctor`.\n")
 	return nil
 }
@@ -307,4 +310,39 @@ func expandHome(path string) string {
 		}
 	}
 	return path
+}
+
+// setupProfilesKey asks for the App Store Connect API key when release.toml
+// declares capabilities, extensions or profile types, or when profiles are
+// regenerated through the API, even if no deploy needs the key.
+func (a *app) setupProfilesKey(ctx context.Context) error {
+	if !declaresProvisioning(a.config) {
+		return nil
+	}
+	specs := credentials.AppStoreAPI()
+	result, err := credentials.Resolver{Stores: a.stores}.Resolve(ctx, specs, a.config.App.ID, "")
+	if err != nil {
+		return err
+	}
+	a.printf("\nProvisioning profiles (`mobile-release profiles`)\n")
+	printSources(a, specs, result)
+	if len(result.Missing) == 0 {
+		return nil
+	}
+	return a.setupShared(ctx, result.Missing)
+}
+
+func declaresProvisioning(c config.Config) bool {
+	if !c.IOSEnabled() || c.IOS.BundleID == "" {
+		return false
+	}
+	if !c.IOS.Capabilities.Empty() || len(c.IOS.Extensions) > 0 || c.IOS.Provisioning.Strategy != "" || c.ProvisioningStrategy() == config.ProvisioningAPI {
+		return true
+	}
+	for _, env := range c.Environments {
+		if len(env.IOSProfiles) > 0 {
+			return true
+		}
+	}
+	return false
 }

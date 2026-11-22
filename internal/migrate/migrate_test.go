@@ -183,3 +183,40 @@ func TestCommentedNonDefaultIsNotReported(t *testing.T) {
 		t.Fatal("nothing should change")
 	}
 }
+
+func TestArrayOfTablesKeepsItsKeys(t *testing.T) {
+	data := `schema_version = 2
+
+[project]
+type = "native"
+
+[app]
+name = "Shop"
+
+[ios]
+bundle_id = "com.example.shop"
+signing = "automatic"
+
+[[ios.extensions]]
+bundle_id = "com.example.shop.widgets"
+signing = "automatic"
+
+[environments.production]
+destinations = ["testflight"]
+`
+	_, err := Run([]byte(data))
+	// "signing" is not a key of an extension: the file is invalid, and
+	// migrate must not read it as the ios.signing default.
+	if err == nil || !strings.Contains(err.Error(), "unknown keys") {
+		t.Fatalf("expected unknown key error, got %v", err)
+	}
+	valid := strings.Replace(data, "bundle_id = \"com.example.shop.widgets\"\nsigning = \"automatic\"", "bundle_id = \"com.example.shop.widgets\"", 1)
+	result, err := Run([]byte(valid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(result.Content)
+	if !strings.Contains(text, "[[ios.extensions]]\nbundle_id = \"com.example.shop.widgets\"") || strings.Count(text, "signing") != 0 {
+		t.Fatalf("unexpected result:\n%s", text)
+	}
+}
