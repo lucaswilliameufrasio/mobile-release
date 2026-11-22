@@ -300,3 +300,26 @@ func TestGradleEnvNeedsEverySigningValue(t *testing.T) {
 		t.Fatal("partial signing must not be injected")
 	}
 }
+
+func TestBytesReadsDataOrPathWithoutTemporaryFiles(t *testing.T) {
+	spec, _ := Lookup(AppStorePrivateKey)
+	set := NewSet()
+	set.Put(Value{Spec: spec, Source: "test", Data: []byte("p8-data")})
+	if data, err := set.Bytes(AppStorePrivateKey); err != nil || string(data) != "p8-data" {
+		t.Fatalf("data = %q, %v", data, err)
+	}
+	path := filepath.Join(t.TempDir(), "key.p8")
+	if err := os.WriteFile(path, []byte("p8-file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	set.Put(Value{Spec: spec, Source: "env", Path: path})
+	if data, err := set.Bytes(AppStorePrivateKey); err != nil || string(data) != "p8-file" {
+		t.Fatalf("path = %q, %v", data, err)
+	}
+	if _, err := set.Bytes(MatchPassword); err == nil {
+		t.Fatal("unresolved values must fail")
+	}
+	if got := len(AppStoreAPI()); got != 3 {
+		t.Fatalf("AppStoreAPI = %d specs", got)
+	}
+}

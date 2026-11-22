@@ -134,6 +134,22 @@ platform :ios do
     build_app(**options)
   end
 
+  desc "Regenerate provisioning profiles in the match repository (mobile-release profiles apply)"
+  lane :profiles do
+    setup_ci if ENV["CI"] == "true"
+    app_store_key
+    team_id = ENV["MOBILE_RELEASE_IOS_TEAM_ID"].to_s
+    # force renews the profiles even when match considers them valid: they
+    # must pick up the capabilities just enabled on the App IDs.
+    match(
+      type: env!("MOBILE_RELEASE_MATCH_TYPE"),
+      readonly: false,
+      force: true,
+      app_identifier: env_list("MOBILE_RELEASE_IOS_BUNDLE_IDS"),
+      team_id: team_id.empty? ? nil : team_id
+    )
+  end
+
   desc "Upload an IPA to TestFlight"
   lane :testflight do
     app_store_key

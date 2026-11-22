@@ -196,3 +196,17 @@ func Required(c config.Config, env *config.Environment, platforms Platforms) []S
 	sort.Slice(required, func(i, j int) bool { return required[i].ID < required[j].ID })
 	return required
 }
+
+// AppStoreAPI lists the App Store Connect API key credentials, used by
+// `mobile-release profiles` and its doctor check.
+func AppStoreAPI() []Spec {
+	return []Spec{specs[AppStoreKeyID], specs[AppStoreIssuerID], specs[AppStorePrivateKey]}
+}
+
+// ProfileLanes lists what the match profiles lane needs besides the API key.
+func ProfileLanes(c config.Config) []Spec {
+	if c.ProvisioningStrategy() != config.ProvisioningMatch {
+		return nil
+	}
+	return []Spec{specs[MatchGitURL], specs[MatchPassword]}
+}

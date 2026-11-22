@@ -49,7 +49,7 @@ func TestEmbeddedFastfileDeclaresEveryLane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, lane := range []string{"next_build_number", "play", "firebase", "build", "testflight", "app_store"} {
+	for _, lane := range []string{"next_build_number", "play", "firebase", "build", "testflight", "app_store", "profiles"} {
 		if !strings.Contains(string(data), "lane :"+lane+" do") {
 			t.Errorf("lane %s missing", lane)
 		}

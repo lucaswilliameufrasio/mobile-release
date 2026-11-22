@@ -163,3 +163,16 @@ func decodeStored(spec Spec, stored string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// Bytes returns a resolved value without writing it to disk: the data, or
+// the content of the file given as *_PATH.
+func (s *Set) Bytes(id string) ([]byte, error) {
+	value, ok := s.values[id]
+	if !ok {
+		return nil, fmt.Errorf("%s is not resolved", id)
+	}
+	if value.Path != "" {
+		return os.ReadFile(value.Path)
+	}
+	return value.Data, nil
+}
