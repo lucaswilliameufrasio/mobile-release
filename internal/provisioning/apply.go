@@ -83,6 +83,8 @@ func (a Applier) printf(format string, args ...any) {
 func (a Applier) Apply(ctx context.Context, plan Plan) Result {
 	var result Result
 	matchKinds := map[string]bool{}
+	// Registering App IDs fills in Bundle: work on a copy of the targets.
+	plan.Targets = append([]TargetPlan(nil), plan.Targets...)
 	for index := range plan.Targets {
 		target := &plan.Targets[index]
 		if !a.prepareTarget(ctx, target, &result) {
