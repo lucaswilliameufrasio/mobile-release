@@ -86,6 +86,8 @@ type Failure struct {
 	Detail string
 	// RetryAfter is sent as the Retry-After header (429).
 	RetryAfter string
+	// After lets this many matching requests through first.
+	After int
 }
 
 // New starts a fake server with a fresh API key.
@@ -209,9 +211,10 @@ func (s *Server) Bundle(identifier string) *Bundle {
 	return nil
 }
 
-// Content is the fake .mobileprovision body for a profile.
-func Content(uuid string) []byte {
-	return []byte("<plist><key>UUID</key><string>" + uuid + "</string></plist>")
+// Content is the fake .mobileprovision body for a profile: like the real
+// ones, the signed payload is a plist with the name and UUID.
+func Content(name, uuid string) []byte {
+	return []byte("<plist><dict><key>Name</key>\n\t<string>" + name + "</string><key>UUID</key><string>" + uuid + "</string></dict></plist>")
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
@@ -229,7 +232,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "NOT_AUTHORIZED", "bad token")
 		return
 	}
-	if failure, ok := s.Fail[r.Method+" "+r.URL.Path]; ok {
+	if failure, ok := s.Fail[r.Method+" "+r.URL.Path]; ok && failure.After > 0 {
+		failure.After--
+		s.Fail[r.Method+" "+r.URL.Path] = failure
+	} else if ok {
 		switch {
 		case failure.Times == 1:
 			delete(s.Fail, r.Method+" "+r.URL.Path)
@@ -422,7 +428,7 @@ func profileResource(profile *Profile) map[string]any {
 	return map[string]any{"type": "profiles", "id": profile.ID, "attributes": map[string]any{
 		"name": profile.Name, "profileType": profile.Type, "profileState": profile.State, "uuid": profile.UUID,
 		"expirationDate": profile.Expires.Format("2006-01-02T15:04:05.000-0700"),
-		"profileContent": base64.StdEncoding.EncodeToString(Content(profile.UUID)),
+		"profileContent": base64.StdEncoding.EncodeToString(Content(profile.Name, profile.UUID)),
 	}}
 }
 
